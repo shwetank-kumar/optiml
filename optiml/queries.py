@@ -283,7 +283,7 @@ class SnflkQueryLib:
             from    {self.dbname}.ACCOUNT_USAGE.STORAGE_USAGE SU
             JOIN    (SELECT COUNT(*) AS DAYS_IN_MONTH,
                             TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01') as DATE_MONTH 
-                         FROM UTILS.TPCDS_SF10TCL.DATE_DIM 
+                         FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM 
                          GROUP BY TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01')) DA 
                      ON DA.DATE_MONTH = TO_DATE(DATE_PART('year',USAGE_DATE)||'-'||DATE_PART('month',USAGE_DATE)||'-01')
             
@@ -303,7 +303,7 @@ class SnflkQueryLib:
                     ,PU.DOLLARS_PER_DAY AS DOLLARS_USED
                     ,'PROJECTED COMPUTE' AS MEASURE_TYPE
             FROM    PROJECTED_USAGE PU
-            JOIN    UTILS.TPCDS_SF10TCL.DATE_DIM DA ON DA.D_DATE BETWEEN PU.CONTRACT_START_DATE AND PU.CONTRACT_END_DATE
+            JOIN    SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM DA ON DA.D_DATE BETWEEN PU.CONTRACT_START_DATE AND PU.CONTRACT_END_DATE
             
             UNION ALL
             
@@ -323,7 +323,8 @@ class SnflkQueryLib:
             FROM    PROJECTED_USAGE PU
             ;                
         ''')
-        return self._exec_sql(sql)
+        df = cursor_to_df(self._exec_sql(sql))
+        return df
 
 
     def get_warehouse_load_history(self, start_date, end_date):
@@ -439,7 +440,7 @@ class SnflkQueryLib:
                    DA.DAYS_IN_MONTH as days_in_month
             from {self.dbname}.account_usage.STORAGE_USAGE as SU
             JOIN    (SELECT COUNT(*) AS DAYS_IN_MONTH, TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01') as DATE_MONTH
-                     FROM UTILS.TPCDS_SF10TCL.DATE_DIM 
+                     FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM 
                      GROUP BY TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01')) DA 
             ON DA.DATE_MONTH = TO_DATE(DATE_PART('year',USAGE_DATE)||'-'||DATE_PART('month',USAGE_DATE)||'-01')
             where usage_date >= '{start_date}' and usage_date <= '{end_date}'
