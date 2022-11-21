@@ -1,3 +1,4 @@
+select cost.WAREHOUSE_NAME, cost.USAGE_DATE, cost.DOLLARS_USED, sum(SUM(DOLLARS_USED)) OVER (order by cost.USAGE_DATE ASC) as Cumulative_Credits_Total from (
 SELECT
         'Storage' AS WAREHOUSE_NAME
         ,SU.USAGE_DATE
@@ -6,4 +7,4 @@ from    KIV.ACCOUNT_USAGE.STORAGE_USAGE SU
 JOIN    (SELECT COUNT(*) AS DAYS_IN_MONTH,TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01') as DATE_MONTH
 FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM
 GROUP BY TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01')) DA
-ON DA.DATE_MONTH = TO_DATE(DATE_PART('year',USAGE_DATE)||'-'||DATE_PART('month',USAGE_DATE)||'-01') order by 2
+ON DA.DATE_MONTH = TO_DATE(DATE_PART('year',USAGE_DATE)||'-'||DATE_PART('month',USAGE_DATE)||'-01')) as cost group by 1, 2, 3 order by 2
