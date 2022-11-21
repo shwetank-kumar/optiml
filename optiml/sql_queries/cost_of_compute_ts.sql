@@ -1,5 +1,5 @@
 SELECT DISTINCT cost.WAREHOUSE_GROUP_NAME, SUM(cost.CREDITS_USED) as total_credits_used,
-TIMESTAMPDIFF('hour', cost.START_TIME, cost.END_TIME) as duration, cost.start_time from (
+sum(SUM(credits_used)) OVER (order by cost.START_TIME ASC) as Cumulative_Credits_Total, cost.start_time, cost.end_time from (
 SELECT DISTINCT
          'WH Compute' as WAREHOUSE_GROUP_NAME,
          WEH.USER_NAME
@@ -13,5 +13,5 @@ SELECT DISTINCT
 from    KIV.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH
 inner join KIV.ACCOUNT_USAGE.WAREHOUSE_EVENTS_HISTORY WEH
 on WMH.WAREHOUSE_ID = WEH.WAREHOUSE_ID
-) as COST group by 4, 1, 3 order by 4 ASC
+) as COST group by 4, 1, 5 order by 4 ASC
 ;
