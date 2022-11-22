@@ -16,7 +16,7 @@ UNION
 --COMPUTE FROM SNOWPIPE
 SELECT
          'Snowpipe' AS WAREHOUSE_GROUP_NAME,
-         'USER' as user_name
+         'SNOWFLAKE' as user_name
         ,PUH.PIPE_NAME AS WAREHOUSE_NAME
         ,PUH.START_TIME
         ,PUH.END_TIME
@@ -31,7 +31,7 @@ UNION
 --COMPUTE FROM CLUSTERING
 SELECT
          'Auto Clustering' AS WAREHOUSE_GROUP_NAME,
-         'USER' as user_name
+         'SNOWFLAKE' as user_name
         ,DATABASE_NAME || '.' || SCHEMA_NAME || '.' || TABLE_NAME AS WAREHOUSE_NAME
         ,ACH.START_TIME
         ,ACH.END_TIME
@@ -46,7 +46,7 @@ UNION
 --COMPUTE FROM MATERIALIZED VIEWS
 SELECT
          'Materialized Views' AS WAREHOUSE_GROUP_NAME,
-         'USER' AS user_name
+         'SNOWFLAKE' AS user_name
         ,DATABASE_NAME || '.' || SCHEMA_NAME || '.' || TABLE_NAME AS WAREHOUSE_NAME
         ,MVH.START_TIME
         ,MVH.END_TIME
@@ -58,7 +58,7 @@ from    KIV.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY MVH
 UNION
 SELECT
          'Replication' AS WAREHOUSE_GROUP_NAME,
-         'USER' as user_name
+         'SNOWFLAKE' as user_name
         ,DATABASE_NAME AS WAREHOUSE_NAME
         ,RUH.START_TIME
         ,RUH.END_TIME
@@ -73,7 +73,7 @@ UNION
 --STORAGE COSTS
 SELECT
          'Storage' AS WAREHOUSE_GROUP_NAME,
-         'USER' as user_name
+         'SNOWFLAKE' as user_name
         ,'Storage' AS WAREHOUSE_NAME
         ,SU.USAGE_DATE
         ,SU.USAGE_DATE
