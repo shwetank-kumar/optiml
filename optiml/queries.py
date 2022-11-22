@@ -2,11 +2,14 @@ class SNFLKQuery():
     def __init__(self, connection, dbname):
         self.connection = connection
         self.dbname = dbname
-        
+
     def query_to_df(self, sql):
         return self.connection.cursor().execute(sql).fetch_pandas_all()
-        
+
     def cost_by_usage(self, start_date, end_date):
+        ini_date = ""
+        if start_date and end_date:
+            ini_date = "where cost.start_time>='{}' and cost.end_time<='{}'".format(start_date, end_date)
         sql = f"""
             -- Calculating cost by usage type YTD
                 WITH CONTRACT_VALUES AS (
@@ -46,7 +49,7 @@ class SNFLKQuery():
                         ,1.00 as CREDIT_PRICE
                         ,(1.00*WMH.CREDITS_USED_COMPUTE) AS DOLLARS_USED
                         ,'ACTUAL COMPUTE' AS MEASURE_TYPE                   
-                from    {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH inner join KIV.ACCOUNT_USAGE.WAREHOUSE_EVENTS_HISTORY WEH on WMH.WAREHOUSE_ID = WEH.WAREHOUSE_ID
+                from    {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH inner join {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_EVENTS_HISTORY WEH on WMH.WAREHOUSE_ID = WEH.WAREHOUSE_ID
                 UNION
                 --COMPUTE FROM SNOWPIPE
                 SELECT
@@ -59,7 +62,7 @@ class SNFLKQuery():
                         ,1.00 as CREDIT_PRICE
                         ,(1.00*PUH.CREDITS_USED) AS DOLLARS_USED
                         ,'ACTUAL COMPUTE' AS MEASURE_TYPE
-                from    KIV.ACCOUNT_USAGE.PIPE_USAGE_HISTORY PUH
+                from    {self.dbname}.ACCOUNT_USAGE.PIPE_USAGE_HISTORY PUH
 
                 UNION
 
@@ -74,7 +77,7 @@ class SNFLKQuery():
                         ,1.00 as CREDIT_PRICE
                         ,(1.00*ACH.CREDITS_USED) AS DOLLARS_USED
                         ,'ACTUAL COMPUTE' AS MEASURE_TYPE
-                from    KIV.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY ACH
+                from    {self.dbname}.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY ACH
 
                 UNION
 
@@ -89,7 +92,7 @@ class SNFLKQuery():
                         ,1.00 as CREDIT_PRICE
                         ,(1.00*MVH.CREDITS_USED) AS DOLLARS_USED
                         ,'ACTUAL COMPUTE' AS MEASURE_TYPE
-                from    KIV.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY MVH
+                from    {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY MVH
                 UNION
                 SELECT
                         'Replication' AS WAREHOUSE_GROUP_NAME,
@@ -101,7 +104,7 @@ class SNFLKQuery():
                         ,1.00 as CREDIT_PRICE
                         ,(1.00*RUH.CREDITS_USED) AS DOLLARS_USED
                         ,'ACTUAL COMPUTE' AS MEASURE_TYPE
-                from    KIV.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY RUH
+                from    {self.dbname}.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY RUH
 
                 UNION
 
@@ -116,200 +119,210 @@ class SNFLKQuery():
                         ,1.00 as CREDIT_PRICE
                         ,((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23)/DA.DAYS_IN_MONTH AS DOLLARS_USED
                         ,'ACTUAL COMPUTE' AS MEASURE_TYPE
-                from    KIV.ACCOUNT_USAGE.STORAGE_USAGE SU
+                from    {self.dbname}.ACCOUNT_USAGE.STORAGE_USAGE SU
                 JOIN    (SELECT COUNT(*) AS DAYS_IN_MONTH,TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01') as DATE_MONTH FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM GROUP BY TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01')) DA ON DA.DATE_MONTH = TO_DATE(DATE_PART('year',USAGE_DATE)||'-'||DATE_PART('month',USAGE_DATE)||'-01')
-                ) as COST group by 1 order by 2, 3 desc
+                ) as COST {ini_date} group by 1 order by 2, 3 desc
                 ;        
             """
         return self.query_to_df(sql)
-    
+
     def cost_by_user_ts(self, start_date, end_date):
+        ini_date = ""
+        if start_date and end_date:
+            ini_date = "where cost.start_time>='{}' and cost.end_time<='{}'".format(start_date, end_date)
         sql = f"""
             --COST.WAREHOUSE_GROUP_NAME, COST.USER_NAME, COST.WAREHOUSE_NAME, COST.START_TIME, COST.END_TIME, SUM(COST.CREDITS_USED), SUM(CREDIT_PRICE), SUM(DOLLARS_USED)
-                SELECT DISTINCT cost.USER_NAME, cost.WAREHOUSE_GROUP_NAME, SUM(cost.CREDITS_USED) as credits_used,
-                sum(SUM(credits_used)) OVER (order by cost.START_TIME ASC) as Cumulative_Credits_Total, cost.START_TIME, cost.END_TIME  from (
-                SELECT DISTINCT
-                        'WH Compute' as WAREHOUSE_GROUP_NAME,
-                        WEH.USER_NAME
-                        ,WMH.WAREHOUSE_NAME
-                        ,WMH.START_TIME
-                        ,WMH.END_TIME
-                        ,WMH.CREDITS_USED
-                        ,1.00 as CREDIT_PRICE
-                        ,(1.00*WMH.CREDITS_USED) AS DOLLARS_USED
-                        ,'ACTUAL COMPUTE' AS MEASURE_TYPE
-                from    KIV.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH inner join KIV.ACCOUNT_USAGE.WAREHOUSE_EVENTS_HISTORY WEH on WMH.WAREHOUSE_ID = WEH.WAREHOUSE_ID
-                UNION
-                --COMPUTE FROM SNOWPIPE
-                SELECT
-                        'Snowpipe' AS WAREHOUSE_GROUP_NAME,
-                        'USER' as user_name
-                        ,PUH.PIPE_NAME AS WAREHOUSE_NAME
-                        ,PUH.START_TIME
-                        ,PUH.END_TIME
-                        ,PUH.CREDITS_USED
-                        ,1.00 as CREDIT_PRICE
-                        ,(1.00*PUH.CREDITS_USED) AS DOLLARS_USED
-                        ,'ACTUAL COMPUTE' AS MEASURE_TYPE
-                from    KIV.ACCOUNT_USAGE.PIPE_USAGE_HISTORY PUH
+            SELECT DISTINCT cost.USER_NAME, cost.WAREHOUSE_GROUP_NAME, SUM(cost.CREDITS_USED) as credits_used,
+            sum(SUM(credits_used)) OVER (order by cost.START_TIME ASC) as Cumulative_Credits_Total, cost.START_TIME, cost.END_TIME  from (
+            SELECT DISTINCT
+                     'WH Compute' as WAREHOUSE_GROUP_NAME,
+                     WEH.USER_NAME
+                    ,WMH.WAREHOUSE_NAME
+                    ,WMH.START_TIME
+                    ,WMH.END_TIME
+                    ,WMH.CREDITS_USED
+                    ,1.00 as CREDIT_PRICE
+                    ,(1.00*WMH.CREDITS_USED) AS DOLLARS_USED
+                    ,'ACTUAL COMPUTE' AS MEASURE_TYPE
+            from    {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH inner join {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_EVENTS_HISTORY WEH on WMH.WAREHOUSE_ID = WEH.WAREHOUSE_ID
+            UNION
+            --COMPUTE FROM SNOWPIPE
+            SELECT
+                     'Snowpipe' AS WAREHOUSE_GROUP_NAME,
+                     'SNOWFLAKE' as user_name
+                    ,PUH.PIPE_NAME AS WAREHOUSE_NAME
+                    ,PUH.START_TIME
+                    ,PUH.END_TIME
+                    ,PUH.CREDITS_USED
+                    ,1.00 as CREDIT_PRICE
+                    ,(1.00*PUH.CREDITS_USED) AS DOLLARS_USED
+                    ,'ACTUAL COMPUTE' AS MEASURE_TYPE
+            from    {self.dbname}.ACCOUNT_USAGE.PIPE_USAGE_HISTORY PUH
 
-                UNION
+            UNION
 
-                --COMPUTE FROM CLUSTERING
-                SELECT
-                        'Auto Clustering' AS WAREHOUSE_GROUP_NAME,
-                        'USER' as user_name
-                        ,DATABASE_NAME || '.' || SCHEMA_NAME || '.' || TABLE_NAME AS WAREHOUSE_NAME
-                        ,ACH.START_TIME
-                        ,ACH.END_TIME
-                        ,ACH.CREDITS_USED
-                        ,1.00 as CREDIT_PRICE
-                        ,(1.00*ACH.CREDITS_USED) AS DOLLARS_USED
-                        ,'ACTUAL COMPUTE' AS MEASURE_TYPE
-                from    KIV.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY ACH
+            --COMPUTE FROM CLUSTERING
+            SELECT
+                     'Auto Clustering' AS WAREHOUSE_GROUP_NAME,
+                     'SNOWFLAKE' as user_name
+                    ,DATABASE_NAME || '.' || SCHEMA_NAME || '.' || TABLE_NAME AS WAREHOUSE_NAME
+                    ,ACH.START_TIME
+                    ,ACH.END_TIME
+                    ,ACH.CREDITS_USED
+                    ,1.00 as CREDIT_PRICE
+                    ,(1.00*ACH.CREDITS_USED) AS DOLLARS_USED
+                    ,'ACTUAL COMPUTE' AS MEASURE_TYPE
+            from    {self.dbname}.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY ACH
 
-                UNION
+            UNION
 
-                --COMPUTE FROM MATERIALIZED VIEWS
-                SELECT
-                        'Materialized Views' AS WAREHOUSE_GROUP_NAME,
-                        'USER' AS user_name
-                        ,DATABASE_NAME || '.' || SCHEMA_NAME || '.' || TABLE_NAME AS WAREHOUSE_NAME
-                        ,MVH.START_TIME
-                        ,MVH.END_TIME
-                        ,MVH.CREDITS_USED
-                        ,1.00 as CREDIT_PRICE
-                        ,(1.00*MVH.CREDITS_USED) AS DOLLARS_USED
-                        ,'ACTUAL COMPUTE' AS MEASURE_TYPE
-                from    KIV.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY MVH
-                UNION
-                SELECT
-                        'Replication' AS WAREHOUSE_GROUP_NAME,
-                        'USER' as user_name
-                        ,DATABASE_NAME AS WAREHOUSE_NAME
-                        ,RUH.START_TIME
-                        ,RUH.END_TIME
-                        ,RUH.CREDITS_USED
-                        ,1.00 as CREDIT_PRICE
-                        ,(1.00*RUH.CREDITS_USED) AS DOLLARS_USED
-                        ,'ACTUAL COMPUTE' AS MEASURE_TYPE
-                from    KIV.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY RUH
+            --COMPUTE FROM MATERIALIZED VIEWS
+            SELECT
+                     'Materialized Views' AS WAREHOUSE_GROUP_NAME,
+                     'SNOWFLAKE' AS user_name
+                    ,DATABASE_NAME || '.' || SCHEMA_NAME || '.' || TABLE_NAME AS WAREHOUSE_NAME
+                    ,MVH.START_TIME
+                    ,MVH.END_TIME
+                    ,MVH.CREDITS_USED
+                    ,1.00 as CREDIT_PRICE
+                    ,(1.00*MVH.CREDITS_USED) AS DOLLARS_USED
+                    ,'ACTUAL COMPUTE' AS MEASURE_TYPE
+            from    {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY MVH
+            UNION
+            SELECT
+                     'Replication' AS WAREHOUSE_GROUP_NAME,
+                     'SNOWFLAKE' as user_name
+                    ,DATABASE_NAME AS WAREHOUSE_NAME
+                    ,RUH.START_TIME
+                    ,RUH.END_TIME
+                    ,RUH.CREDITS_USED
+                    ,1.00 as CREDIT_PRICE
+                    ,(1.00*RUH.CREDITS_USED) AS DOLLARS_USED
+                    ,'ACTUAL COMPUTE' AS MEASURE_TYPE
+            from    {self.dbname}.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY RUH
 
-                UNION
+            UNION
 
-                --STORAGE COSTS
-                SELECT
-                        'Storage' AS WAREHOUSE_GROUP_NAME,
-                        'USER' as user_name
-                        ,'Storage' AS WAREHOUSE_NAME
-                        ,SU.USAGE_DATE
-                        ,SU.USAGE_DATE
-                        ,NULL AS CREDITS_USED
-                        ,1.00 as CREDIT_PRICE
-                        ,((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23)/DA.DAYS_IN_MONTH AS DOLLARS_USED
-                        ,'ACTUAL COMPUTE' AS MEASURE_TYPE
-                from    KIV.ACCOUNT_USAGE.STORAGE_USAGE SU
-                JOIN    (SELECT COUNT(*) AS DAYS_IN_MONTH,TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01') as DATE_MONTH FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM GROUP BY TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01')) DA ON DA.DATE_MONTH = TO_DATE(DATE_PART('year',USAGE_DATE)||'-'||DATE_PART('month',USAGE_DATE)||'-01')
-                ) as COST group by 5, 1, 2, 6 order by 5 asc
-                ;
+            --STORAGE COSTS
+            SELECT
+                     'Storage' AS WAREHOUSE_GROUP_NAME,
+                     'SNOWFLAKE' as user_name
+                    ,'Storage' AS WAREHOUSE_NAME
+                    ,SU.USAGE_DATE
+                    ,SU.USAGE_DATE
+                    ,NULL AS CREDITS_USED
+                    ,1.00 as CREDIT_PRICE
+                    ,((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23)/DA.DAYS_IN_MONTH AS DOLLARS_USED
+                    ,'ACTUAL COMPUTE' AS MEASURE_TYPE
+            from    {self.dbname}.ACCOUNT_USAGE.STORAGE_USAGE SU
+            JOIN    (SELECT COUNT(*) AS DAYS_IN_MONTH,TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01') as DATE_MONTH FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM GROUP BY TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01')) DA ON DA.DATE_MONTH = TO_DATE(DATE_PART('year',USAGE_DATE)||'-'||DATE_PART('month',USAGE_DATE)||'-01')
+            ) as COST {ini_date} group by 5, 1, 2, 6 order by 5 asc
+            ;
+
         """
         return self.query_to_df(sql)
 
-
-    def cost_by_wh_ts(self):
+    def cost_by_wh_ts(self, start_date, end_date):
+        ini_date = ""
+        if start_date and end_date:
+            ini_date = "where cost.start_time>='{}' and cost.end_time<='{}'".format(start_date, end_date)
         sql = f"""
-        --COST.WAREHOUSE_GROUP_NAME, COST.USER_NAME, COST.WAREHOUSE_NAME, COST.START_TIME, COST.END_TIME, SUM(COST.CREDITS_USED), SUM(CREDIT_PRICE), SUM(DOLLARS_USED)
-                 SELECT DISTINCT cost.WAREHOUSE_NAME, cost.WAREHOUSE_GROUP_NAME, SUM(cost.CREDITS_USED) as credits_used, sum(SUM(credits_used)) OVER (order by cost.START_TIME ASC) as Cumulative_Credits_Total, cost.START_TIME, cost.END_TIME  from (
-                  SELECT DISTINCT
-               'WH Compute' as WAREHOUSE_GROUP_NAME,
-         WEH.USER_NAME
-        ,WMH.WAREHOUSE_NAME
-        ,WMH.START_TIME
-        ,WMH.END_TIME
-        ,WMH.CREDITS_USED
-        --,1.00 as CREDIT_PRICE
-        ,NULL AS DOLLARS_USED
-        ,'ACTUAL COMPUTE' AS MEASURE_TYPE
+                --COST.WAREHOUSE_GROUP_NAME, COST.USER_NAME, COST.WAREHOUSE_NAME, COST.START_TIME, COST.END_TIME, SUM(COST.CREDITS_USED), SUM(CREDIT_PRICE), SUM(DOLLARS_USED)
+        SELECT DISTINCT cost.WAREHOUSE_NAME, cost.WAREHOUSE_GROUP_NAME, SUM(cost.CREDITS_USED) as credits_used, sum(SUM(credits_used)) OVER (order by cost.START_TIME ASC) as Cumulative_Credits_Total, cost.START_TIME, cost.END_TIME  from (
+        SELECT DISTINCT
+                 'WH Compute' as WAREHOUSE_GROUP_NAME,
+                 WEH.USER_NAME
+                ,WMH.WAREHOUSE_NAME
+                ,WMH.START_TIME
+                ,WMH.END_TIME
+                ,WMH.CREDITS_USED
+                --,1.00 as CREDIT_PRICE
+                ,NULL AS DOLLARS_USED
+                ,'ACTUAL COMPUTE' AS MEASURE_TYPE
         from    {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH inner join {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_EVENTS_HISTORY WEH on WMH.WAREHOUSE_ID = WEH.WAREHOUSE_ID
         UNION
         --COMPUTE FROM SNOWPIPE
         SELECT
-         'Snowpipe' AS WAREHOUSE_GROUP_NAME,
-         'USER' as user_name
-        ,PUH.PIPE_NAME AS WAREHOUSE_NAME
-        ,PUH.START_TIME
-        ,PUH.END_TIME
-        ,PUH.CREDITS_USED
-        --,1.00 as CREDIT_PRICE
-        ,NULL AS DOLLARS_USED
-        ,'ACTUAL COMPUTE' AS MEASURE_TYPE
+                 'Snowpipe' AS WAREHOUSE_GROUP_NAME,
+                 'SNOWFLAKE' as user_name
+                ,PUH.PIPE_NAME AS WAREHOUSE_NAME
+                ,PUH.START_TIME
+                ,PUH.END_TIME
+                ,PUH.CREDITS_USED
+                --,1.00 as CREDIT_PRICE
+                ,NULL AS DOLLARS_USED
+                ,'ACTUAL COMPUTE' AS MEASURE_TYPE
         from    {self.dbname}.ACCOUNT_USAGE.PIPE_USAGE_HISTORY PUH
 
         UNION
 
         --COMPUTE FROM CLUSTERING
         SELECT
-         'Auto Clustering' AS WAREHOUSE_GROUP_NAME,
-         'USER' as user_name
-        ,DATABASE_NAME || '.' || SCHEMA_NAME || '.' || TABLE_NAME AS WAREHOUSE_NAME
-        ,ACH.START_TIME
-        ,ACH.END_TIME
-        ,ACH.CREDITS_USED
-        --,1.00 as CREDIT_PRICE
-        ,NULL AS DOLLARS_USED
-        ,'ACTUAL COMPUTE' AS MEASURE_TYPE
+                 'Auto Clustering' AS WAREHOUSE_GROUP_NAME,
+                 'SNOWFLAKE' as user_name
+                ,DATABASE_NAME || '.' || SCHEMA_NAME || '.' || TABLE_NAME AS WAREHOUSE_NAME
+                ,ACH.START_TIME
+                ,ACH.END_TIME
+                ,ACH.CREDITS_USED
+                --,1.00 as CREDIT_PRICE
+                ,NULL AS DOLLARS_USED
+                ,'ACTUAL COMPUTE' AS MEASURE_TYPE
         from    {self.dbname}.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY ACH
 
         UNION
 
-         --COMPUTE FROM MATERIALIZED VIEWS
+        --COMPUTE FROM MATERIALIZED VIEWS
         SELECT
-         'Materialized Views' AS WAREHOUSE_GROUP_NAME,
-         'USER' AS user_name
-        ,DATABASE_NAME || '.' || SCHEMA_NAME || '.' || TABLE_NAME AS WAREHOUSE_NAME
-        ,MVH.START_TIME
-        ,MVH.END_TIME
-        ,MVH.CREDITS_USED
-        --,1.00 as CREDIT_PRICE
-        ,NULL AS DOLLARS_USED
-        ,'ACTUAL COMPUTE' AS MEASURE_TYPE
+                 'Materialized Views' AS WAREHOUSE_GROUP_NAME,
+                 'SNOWFLAKE' AS user_name
+                ,DATABASE_NAME || '.' || SCHEMA_NAME || '.' || TABLE_NAME AS WAREHOUSE_NAME
+                ,MVH.START_TIME
+                ,MVH.END_TIME
+                ,MVH.CREDITS_USED
+                --,1.00 as CREDIT_PRICE
+                ,NULL AS DOLLARS_USED
+                ,'ACTUAL COMPUTE' AS MEASURE_TYPE
         from    {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY MVH
         UNION
         SELECT
-         'Replication' AS WAREHOUSE_GROUP_NAME,
-         'USER' as user_name
-        ,DATABASE_NAME AS WAREHOUSE_NAME
-        ,RUH.START_TIME
-        ,RUH.END_TIME
-        ,RUH.CREDITS_USED
-        --,1.00 as CREDIT_PRICE
-        ,NULL AS DOLLARS_USED
-        ,'ACTUAL COMPUTE' AS MEASURE_TYPE
-       from    {self.dbname}.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY RUH
+                 'Replication' AS WAREHOUSE_GROUP_NAME,
+                 'SNOWFLAKE' as user_name
+                ,DATABASE_NAME AS WAREHOUSE_NAME
+                ,RUH.START_TIME
+                ,RUH.END_TIME
+                ,RUH.CREDITS_USED
+                --,1.00 as CREDIT_PRICE
+                ,NULL AS DOLLARS_USED
+                ,'ACTUAL COMPUTE' AS MEASURE_TYPE
+        from    {self.dbname}.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY RUH
 
-       UNION
+        UNION
 
-       --STORAGE COSTS
-       SELECT
-         'Storage' AS WAREHOUSE_GROUP_NAME,
-         'USER' as user_name
-        ,'Storage' AS WAREHOUSE_NAME
-        ,SU.USAGE_DATE
-        ,SU.USAGE_DATE
-        ,NULL AS CREDITS_USED
-        --,1.00 as CREDIT_PRICE
-        ,((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23)/DA.DAYS_IN_MONTH AS DOLLARS_USED
-        ,'ACTUAL COMPUTE' AS MEASURE_TYPE
+        --STORAGE COSTS
+        SELECT
+                 'Storage' AS WAREHOUSE_GROUP_NAME,
+                 'SNOWFLAKE' as user_name
+                ,'Storage' AS WAREHOUSE_NAME
+                ,SU.USAGE_DATE
+                ,SU.USAGE_DATE
+                ,NULL AS CREDITS_USED
+                --,1.00 as CREDIT_PRICE
+                ,((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23)/DA.DAYS_IN_MONTH AS DOLLARS_USED
+                ,'ACTUAL COMPUTE' AS MEASURE_TYPE
         from    {self.dbname}.ACCOUNT_USAGE.STORAGE_USAGE SU
-       JOIN    (SELECT COUNT(*) AS DAYS_IN_MONTH,TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01') as DATE_MONTH FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM GROUP BY TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01')) DA ON DA.DATE_MONTH = TO_DATE(DATE_PART('year',USAGE_DATE)||'-'||DATE_PART('month',USAGE_DATE)||'-01')
-        ) as COST group by 5, 1, 2, 6 order by 5 asc;
+        JOIN    (SELECT COUNT(*) AS DAYS_IN_MONTH,TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01') as DATE_MONTH FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM GROUP BY TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01')) DA ON DA.DATE_MONTH = TO_DATE(DATE_PART('year',USAGE_DATE)||'-'||DATE_PART('month',USAGE_DATE)||'-01')
+        ) as COST {ini_date} group by 5, 1, 2, 6 order by 5 asc
+        ;
+
         """
 
         return self.query_to_df(sql)
 
-
-    def cost_of_autoclustering_ts(self):
-        sql= f"""
+    def cost_of_autoclustering_ts(self, start_date, end_date):
+        ini_date = ""
+        if start_date and end_date:
+            ini_date = "where ACH.start_time>='{}' and ACH.end_time<='{}'".format(start_date, end_date)
+        sql = f"""
         SELECT
         'Auto Clustering' AS WAREHOUSE_GROUP_NAME
         ,DATABASE_NAME || '.' || SCHEMA_NAME || '.' || TABLE_NAME AS WAREHOUSE_NAME
@@ -320,13 +333,15 @@ class SNFLKQuery():
         --,1.00 as CREDIT_PRICE
         --,(1.00*ACH.CREDITS_USED) AS DOLLARS_USED
         --,'ACTUAL COMPUTE' AS MEASURE_TYPE
-        from    {self.dbname}.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY ACH group by 5, 2, 6 order by 5;
+        from    {self.dbname}.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY ACH {ini_date} group by 5, 2, 6 order by 5;
         """
 
         return self.query_to_df(sql)
 
-
-    def cost_of_cloud_services_ts(self):
+    def cost_of_cloud_services_ts(self, start_date, end_date):
+        ini_date = ""
+        if start_date and end_date:
+            ini_date = "where cost.start_time>='{}' and cost.end_time<='{}'".format(start_date, end_date)
         sql = f"""
         SELECT DISTINCT cost.WAREHOUSE_GROUP_NAME, SUM(cost.CREDITS_USED) as credits_used, 
         sum(SUM(credits_used)) OVER (order by cost.START_TIME ASC) as Cumulative_Credits_Total, cost.START_TIME, cost.END_TIME  from (
@@ -341,12 +356,15 @@ class SNFLKQuery():
         --,(1.00*WMH.CREDITS_USED_CLOUD_SERVICES) AS DOLLARS_USED
         ,'ACTUAL COMPUTE' AS MEASURE_TYPE
         from    {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH inner join {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_EVENTS_HISTORY WEH on WMH.WAREHOUSE_ID = WEH.WAREHOUSE_ID
-         ) as COST group by 4, 1, 5 order by 4 asc;
+         ) as COST {ini_date} group by 4, 1, 5 order by 4 asc;
         """
 
         return self.query_to_df(sql)
 
-    def cost_of_compute_ts(self):
+    def cost_of_compute_ts(self, start_date, end_date):
+        ini_date = ""
+        if start_date and end_date:
+            ini_date = "where cost.start_time>='{}' and cost.end_time<='{}'".format(start_date, end_date)
         sql = f"""
         SELECT DISTINCT cost.WAREHOUSE_GROUP_NAME, SUM(cost.CREDITS_USED) as total_credits_used,
         sum(SUM(credits_used)) OVER (order by cost.START_TIME ASC) as Cumulative_Credits_Total, cost.start_time, cost.end_time from (
@@ -363,12 +381,15 @@ class SNFLKQuery():
         from    {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH
         inner join {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_EVENTS_HISTORY WEH
         on WMH.WAREHOUSE_ID = WEH.WAREHOUSE_ID
-        ) as COST group by 4, 1, 5 order by 4 ASC;
+        ) as COST {ini_date} group by 4, 1, 5 order by 4 ASC;
         """
 
         return self.query_to_df(sql)
 
-    def cost_of_materialized_views_ts(self):
+    def cost_of_materialized_views_ts(self, start_date, end_date):
+        ini_date = ""
+        if start_date and end_date:
+            ini_date = "where MVH.start_time>='{}' and MVH.end_time<='{}'".format(start_date, end_date)
         sql = f"""
         SELECT
          'Materialized Views' AS WAREHOUSE_GROUP_NAME
@@ -380,12 +401,15 @@ class SNFLKQuery():
         --,1.00 as CREDIT_PRICE
         --,(1.00*MVH.CREDITS_USED) AS DOLLARS_USED
         --,'ACTUAL COMPUTE' AS MEASURE_TYPE
-        from    {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY MVH group by 5, 2, 6 order by 5;
+        from    {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY MVH {ini_date} group by 5, 2, 6 order by 5;
         """
 
         return self.query_to_df(sql)
 
-    def cost_of_replication_ts(self):
+    def cost_of_replication_ts(self, start_date, end_date):
+        ini_date = ""
+        if start_date and end_date:
+            ini_date = "where RUH.start_time>='{}' and RUH.end_time<='{}'".format(start_date, end_date)
         sql = f"""
           SELECT
          'Replication' AS WAREHOUSE_GROUP_NAME
@@ -394,12 +418,15 @@ class SNFLKQuery():
         ,sum(SUM(credits_used)) OVER (order by RUH.START_TIME ASC) as Cumulative_Credits_Total
         ,RUH.START_TIME
         ,RUH.END_TIME
-        from    {self.dbname}.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY RUH group by 5, 2, 6 order by 5;
+        from    {self.dbname}.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY RUH {ini_date} group by 5, 2, 6 order by 5;
         """
 
         return self.query_to_df(sql)
 
-    def cost_of_searchoptimization_ts(self):
+    def cost_of_searchoptimization_ts(self, start_date, end_date):
+        ini_date = ""
+        if start_date and end_date:
+            ini_date = "where SOH.start_time>='{}' and SOH.end_time<='{}'".format(start_date, end_date)
         sql = f"""
          SELECT
          'Search Optimization' AS WAREHOUSE_GROUP_NAME
@@ -408,12 +435,15 @@ class SNFLKQuery():
         ,sum(SUM(credits_used)) OVER (order by SOH.START_TIME ASC) as Cumulative_Credits_Total
         ,SOH.START_TIME
         ,SOH.END_TIME
-        from    {self.dbname}.ACCOUNT_USAGE.SEARCH_OPTIMIZATION_HISTORY SOH group by 5, 2, 6 order by 5;
+        from    {self.dbname}.ACCOUNT_USAGE.SEARCH_OPTIMIZATION_HISTORY SOH {ini_date} group by 5, 2, 6 order by 5;
         """
 
         return self.query_to_df(sql)
 
-    def cost_of_snowpipe_ts(self):
+    def cost_of_snowpipe_ts(self, start_date, end_date):
+        ini_date = ""
+        if start_date and end_date:
+            ini_date = "where PUH.start_time>='{}' and PUH.end_time<='{}'".format(start_date, end_date)
         sql = f"""
           SELECT
          'Snowpipe' AS WAREHOUSE_GROUP_NAME
@@ -425,7 +455,7 @@ class SNFLKQuery():
         --,1.00 as CREDIT_PRICE
         --,(1.00*PUH.CREDITS_USED) AS DOLLARS_USED
         --,'ACTUAL COMPUTE' AS MEASURE_TYPE
-        from    {self.dbname}.ACCOUNT_USAGE.PIPE_USAGE_HISTORY PUH group by 5, 2, 6 order by 5;
+        from    {self.dbname}.ACCOUNT_USAGE.PIPE_USAGE_HISTORY PUH {ini_date} group by 5, 2, 6 order by 5;
         """
 
         return self.query_to_df(sql)
@@ -454,7 +484,6 @@ class SNFLKQuery():
 
         return self.query_to_df(sql)
 
-
     def show_wh_without_resource_monitors(self):
         sql = f"""
         SHOW WAREHOUSES;
@@ -462,6 +491,3 @@ class SNFLKQuery():
         """
 
         return self.query_to_df(sql)
-
-    
-    
