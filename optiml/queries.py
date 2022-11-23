@@ -319,6 +319,15 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_autoclustering_ts(self, start_date, end_date):
+        """Calculates the overall cost of autoclustering for a given time period using Automatic 
+        Clustering History table. Outputs a dataframe with the following columns:
+        Start time: The start time of the billing period
+        End time: The end time of the billing period
+        Database name: The database name of the table that was clustered
+        Schema name: The schema name of the table that was clustered
+        Table name: The name of the table that was clustered
+        Total credits used: Total credits used during the billing period
+        """
         ini_date = ""
         if start_date and end_date:
             ini_date = "where ACH.start_time>='{}' and ACH.end_time<='{}'".format(start_date, end_date)
@@ -335,6 +344,20 @@ class SNFLKQuery():
         --,'ACTUAL COMPUTE' AS MEASURE_TYPE
         from    {self.dbname}.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY ACH {ini_date} group by 5, 2, 6 order by 5;
         """
+
+        # Use this:
+        # select to_date(start_time) as date
+        # ,database_name
+        # ,schema_name
+        # ,table_name
+        # ,sum(credits_used) as credits_used
+
+        # from "SNOWFLAKE"."ACCOUNT_USAGE"."AUTOMATIC_CLUSTERING_HISTORY"
+        
+        # where start_time >= dateadd(month,-1,current_timestamp())
+        # group by 1,2,3,4
+        # order by 5 desc
+        # ;
 
         return self.query_to_df(sql)
 
