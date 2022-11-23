@@ -2,14 +2,15 @@ from datetime import date
 
 
 class SNFLKQuery():
-    def __init__(self, connection, dbname):
+    credit_values = {
+    "standard": 2,
+    "enterprise": 3,
+    "business critical": 4
+    }
+    def __init__(self, connection, dbname, credit_value="standard"):
         self.connection = connection
         self.dbname = dbname
-        self.credit_values = {
-        "standard": 2,
-        "enterprise": 3,
-        "business critical": 4
-        }
+        self.credit_value = credit_value
 
     def query_to_df(self, sql):
         return self.connection.cursor().execute(sql).fetch_pandas_all()
@@ -19,6 +20,9 @@ class SNFLKQuery():
             today_date = date.today()
             end_date = str(today_date)
             print(end_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
             with cte_date_wh as (
               select
@@ -31,7 +35,8 @@ class SNFLKQuery():
             )
             select
                   warehouse_name
-                  ,sum(credits_used_date_wh)
+                  ,sum(credits_used_date_wh) as total_credits_used
+                  ,({credit_val}*total_credits_used) as total_dollars_used
             from cte_date_wh where start_time between '{start_date}' and '{end_date}' group by warehouse_name;
             """
         return self.query_to_df(sql)
@@ -40,6 +45,9 @@ class SNFLKQuery():
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
             with cte_date_wh as(
               select
@@ -53,6 +61,7 @@ class SNFLKQuery():
             select
                   warehouse_name
                   ,credits_used_date_wh
+                  ,({credit_val}*credits_used_date_wh) as total_dollars_used
                   ,start_time
                   ,end_time
             from cte_date_wh where start_time between '{start_date}' and '{end_date}' order by start_time;
@@ -159,15 +168,19 @@ class SNFLKQuery():
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
                 select warehouse_name
                       ,credits_used
+                      ,({credit_val}*credits_used) as total_dollars_used
                       ,start_time
                       ,end_time
                 from {self.dbname}.account_usage.warehouse_metering_history
                 where start_time between '{start_date}' and '{end_date}' -->= dateadd(day, -5, current_timestamp())
-                group by 1,2,3,4
-                order by 3 asc;
+                group by 1,2,4,5
+                order by 4 asc;
         """
         return self.query_to_df(sql)
 
@@ -175,15 +188,18 @@ class SNFLKQuery():
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
                 select warehouse_name
                       ,sum(credits_used) as credits_used_compute_sum
+                      ,({credit_val}*credits_used_compute_sum) as total_dollars_used
                 from {self.dbname}.account_usage.warehouse_metering_history
                 where start_time between '{start_date}' and '{end_date}' -->= dateadd(day, -5, current_timestamp())
                 group by 1
-                order by 2 desc;
+                order by 1 desc;
         """
-
         return self.query_to_df(sql)
 
     def cost_of_autoclustering_ts(self, start_date='2022-01-01', end_date=''):
@@ -199,17 +215,21 @@ class SNFLKQuery():
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
         select database_name
               ,schema_name
               ,table_name
               ,sum(credits_used) as credits_used
+              ,({credit_val}*credits_used) as total_dollars_used
               ,start_time
               ,end_time
         from {self.dbname}.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY
         where start_time between '{start_date}' and '{end_date}'
-        group by 1,2,3,5,6
-        order by 5 desc;
+        group by 1,2,3,5,6,7
+        order by 6 desc;
         """
         return self.query_to_df(sql)
 
@@ -226,11 +246,15 @@ class SNFLKQuery():
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
         select database_name
               ,schema_name
               ,table_name
               ,sum(credits_used) as total_credits_used
+              ,({credit_val}*total_credits_used) as total_dollars_used
         from {self.dbname}.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY
         where start_time between '{start_date}' and '{end_date}'
         group by 1,2,3
@@ -256,13 +280,17 @@ class SNFLKQuery():
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
         SELECT DISTINCT
                 WMH.WAREHOUSE_NAME
                 ,WMH.CREDITS_USED_CLOUD_SERVICES as CREDITS_USED
+                ,({credit_val}*CREDITS_USED) as total_dollars_used
                 ,WMH.START_TIME
                 ,WMH.END_TIME
-        from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH where WMH.START_TIME between '{start_date}' and '{end_date}' order by 3 asc;
+        from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH where WMH.START_TIME between '{start_date}' and '{end_date}' order by 4 asc;
         """
 
         return self.query_to_df(sql)
@@ -271,10 +299,14 @@ class SNFLKQuery():
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
         SELECT DISTINCT
                 WMH.WAREHOUSE_NAME
                 ,SUM(WMH.CREDITS_USED_CLOUD_SERVICES) as TOTAL_CREDITS_USED
+                ,({credit_val}*TOTAL_CREDITS_USED) as total_dollars_used
         from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH
         where WMH.START_TIME between '{start_date}' and '{end_date}' group by 1 order by 1 asc
         """
@@ -293,15 +325,18 @@ class SNFLKQuery():
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
         SELECT DISTINCT
                 WMH.WAREHOUSE_NAME
                 ,WMH.CREDITS_USED_COMPUTE as CREDITS_USED
+                ,({credit_val}*CREDITS_USED) as total_dollars_used
                 ,WMH.START_TIME
                 ,WMH.END_TIME
-        from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH where WMH.START_TIME between '{start_date}' and '{end_date}' order by 3 asc;
+        from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH where WMH.START_TIME between '{start_date}' and '{end_date}' order by 4 asc;
         """
-
         return self.query_to_df(sql)
 
     def cost_of_compute(self, start_date='2022-01-01', end_date=''):
@@ -316,31 +351,38 @@ class SNFLKQuery():
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
         SELECT DISTINCT
                 WMH.WAREHOUSE_NAME
                 ,sum(WMH.CREDITS_USED_COMPUTE) as TOTAL_CREDITS_USED
+                ,({credit_val}*TOTAL_CREDITS_USED) as TOTAL_DOLLARS_USED
         from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH
         where WMH.START_TIME between '{start_date}' and '{end_date}' group by 1 order by 1 asc
         """
-
         return self.query_to_df(sql)
 
     def cost_of_materialized_views_ts(self, start_date='2022-01-01', end_date=''):
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
         select
             database_name
             ,schema_name
             ,table_name
             ,credits_used
+            ,({credit_val}*credits_used) as total_dollars_used
             ,start_time
             ,end_time
         from {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY
         where start_time between '{start_date}' and '{end_date}'
-        order by 5 desc;
+        order by 6 desc;
         """
         return self.query_to_df(sql)
 
@@ -348,16 +390,20 @@ class SNFLKQuery():
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
         select
             database_name
             ,schema_name
             ,table_name
             ,sum(credits_used) as credits_used
+            ,({credit_val}*credits_used) as total_dollars_used
         from {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY
         where start_time between '{start_date}' and '{end_date}'
-        group by 1,2,3,4
-        order by 5 desc;
+        group by 1,2,3,5
+        order by 1 asc;
         """
         return self.query_to_df(sql)
 
@@ -365,15 +411,19 @@ class SNFLKQuery():
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
         select
             database_name
             ,credits_used
+            ,({credit_val}*credits_used) as total_dollars_used
             ,start_time
             ,end_time
         from {self.dbname}.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY
         where start_time between '{start_date}' and '{end_date}'
-        order by 3 desc;
+        order by 4 desc;
         """
 
         return self.query_to_df(sql)
@@ -382,13 +432,17 @@ class SNFLKQuery():
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
         select
             database_name
             ,sum(credits_used) as credits_used
+            ,({credit_val}*credits_used) as total_dollars_used
         from {self.dbname}.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY
         where start_time between '{start_date}' and '{end_date}'
-        group by 1
+        group by 1, 3
         order by 1 asc;
         """
 
@@ -398,15 +452,19 @@ class SNFLKQuery():
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
          select
              database_name
              ,schema_name
              ,table_name
              ,sum(credits_used) as credits_used
+             ,({credit_val}*credits_used) as total_dollars_used
          from {self.dbname}.ACCOUNT_USAGE.SEARCH_OPTIMIZATION_HISTORY
          where start_time between '{start_date}' and '{end_date}'
-         group by 1,2,3
+         group by 1,2,3,5
          order by 1 desc;
         """
 
@@ -416,51 +474,60 @@ class SNFLKQuery():
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
          select
              database_name
              ,schema_name
              ,table_name
              ,sum(credits_used) as credits_used
+             ,({credit_val}*credits_used) as total_dollars_used
          from {self.dbname}.ACCOUNT_USAGE.SEARCH_OPTIMIZATION_HISTORY
          where start_time between '{start_date}' and '{end_date}'
-         group by 1,2,3
+         group by 1,2,3,5
          order by 1 desc;
         """
-
         return self.query_to_df(sql)
 
     def cost_of_snowpipe_ts(self, start_date='2022-01-01', end_date=''):
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
           select
             pipe_name
             ,credits_used
             ,start_time
             ,end_time
+            ,({credit_val}*credits_used) as total_dollars_used
           from {self.dbname}.ACCOUNT_USAGE.PIPE_USAGE_HISTORY
           where start_time between '{start_date}' and '{end_date}'
           order by 1 desc;
         """
-
         return self.query_to_df(sql)
 
     def cost_of_snowpipe(self, start_date='2022-01-01', end_date=''):
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
           select
             pipe_name
             ,sum(credits_used) as credits_used
+            ,({credit_val}*credits_used) as total_dollars_used
           from {self.dbname}.ACCOUNT_USAGE.PIPE_USAGE_HISTORY
           where start_time between '{start_date}' and '{end_date}'
-          group by 1
+          group by 1, 3
           order by 1 desc;
         """
-
         return self.query_to_df(sql)
 
     def cost_of_storage_ts(self, start_date='2022-01-01', end_date=''):
@@ -482,3 +549,8 @@ class SNFLKQuery():
         where cost.usage_date between '{start_date}' and '{end_date}' group by 1, 2, 3 order by 2 asc;
         """
         return self.query_to_df(sql)
+
+conn = SnowflakeConnConfig(accountname="jg84276.us-central1.gcp", username="nikhilu", password="Teqfocus!1")
+con = conn.create_connection()
+queryy = SNFLKQuery(con, "KIV", "enterprise")
+print(queryy.cost_by_usage('2021-01-01','2022-05-01'))
