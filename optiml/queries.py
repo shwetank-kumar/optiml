@@ -6,7 +6,7 @@ class SNFLKQuery():
     def query_to_df(self, sql):
         return self.connection.cursor().execute(sql).fetch_pandas_all()
 
-    def cost_by_usage(self, start_date, end_date):
+    def cost_by_usage_type(self, start_date, end_date):
         ini_date = ""
         if start_date and end_date:
             ini_date = "where cost.start_time>='{}' and cost.end_time<='{}'".format(start_date, end_date)

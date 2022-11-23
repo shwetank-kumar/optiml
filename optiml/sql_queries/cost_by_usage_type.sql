@@ -6,7 +6,6 @@ WITH CONTRACT_VALUES AS (
               ,10000.00::decimal(38,0) as TOTAL_CONTRACT_VALUE
               ,'2022-01-01'::timestamp as CONTRACT_START_DATE
               ,DATEADD(month,12,'2022-01-01')::timestamp as CONTRACT_END_DATE
-
 ),
 PROJECTED_USAGE AS (
 
