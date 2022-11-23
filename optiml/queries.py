@@ -362,6 +362,14 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_compute_ts(self, start_date, end_date):
+        """Calculates the overall cost of compute for a given time period using Snowflake Warehouse 
+        Metering History tables. Outputs a dataframe with the following columns:
+        Start time: The start time of the billing period
+        End time: The end time of the billing period
+        Total credits used: Total credits used during the billing period
+        Compute credits used: Compute credits used during the billing period
+        Cloud services credits used: Cloud services credits used to support the compute
+        """
         ini_date = ""
         if start_date and end_date:
             ini_date = "where cost.start_time>='{}' and cost.end_time<='{}'".format(start_date, end_date)
