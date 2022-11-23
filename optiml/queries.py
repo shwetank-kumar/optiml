@@ -549,3 +549,8 @@ class SNFLKQuery():
         where cost.usage_date between '{start_date}' and '{end_date}' group by 1, 2, 3 order by 2 asc;
         """
         return self.query_to_df(sql)
+
+conn = SnowflakeConnConfig(accountname="jg84276.us-central1.gcp", username="nikhilu", password="Teqfocus!1")
+con = conn.create_connection()
+queryy = SNFLKQuery(con, "KIV", "enterprise")
+print(queryy.cost_by_usage('2021-01-01','2022-05-01'))
