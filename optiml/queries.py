@@ -77,7 +77,7 @@ class SNFLKQuery():
         snowpipe_sum = float(snowpipe_df["TOTAL_DOLLARS_USED"].sum())
         snowpipe_credits = float(snowpipe_df["TOTAL_CREDITS_USED"].sum())
         usage_list.append(["Snowpipe", snowpipe_credits, snowpipe_sum])
-        sqldf = pd.DataFrame(data = usage_list, columns=["Cost Category", "Credits", "Dollars"])
+        sqldf = pd.DataFrame(data = usage_list, columns=["cost_category", "credits", "dollars"])
         return sqldf
 
 
