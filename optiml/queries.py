@@ -53,29 +53,29 @@ class SNFLKQuery():
         snowpipe_df = self.cost_of_snowpipe(start_date, end_date)
         autocluster_df = self.cost_of_autoclustering(start_date, end_date)
 
-        storage_sum = float(storage_df["DOLLARS_USED"].sum())
+        storage_sum = float(storage_df["DOLLARS"].sum())
         storage_credits = 0
         usage_list.append(["Storage", storage_credits, storage_sum])
-        compute_sum = float(compute_df["TOTAL_DOLLARS_USED"].sum())
-        compute_credits = float(compute_df["TOTAL_CREDITS_USED"].sum())
+        compute_sum = float(compute_df["DOLLARS"].sum())
+        compute_credits = float(compute_df["CREDITS"].sum())
         usage_list.append(["Compute", compute_credits, compute_sum])
-        cloud_service_sum = float(cloud_service_df["TOTAL_DOLLARS_USED"].sum())
-        cloud_services_credits = float(cloud_service_df["TOTAL_CREDITS_USED"].sum())
+        cloud_service_sum = float(cloud_service_df["DOLLARS"].sum())
+        cloud_services_credits = float(cloud_service_df["CREDITS"].sum())
         usage_list.append(["Cloud Service", cloud_services_credits, cloud_service_sum])
-        autocluster_sum = float(autocluster_df["TOTAL_DOLLARS_USED"].sum())
-        autocluster_credits = float(autocluster_df["TOTAL_CREDITS_USED"].sum())
+        autocluster_sum = float(autocluster_df["DOLLARS"].sum())
+        autocluster_credits = float(autocluster_df["CREDITS"].sum())
         usage_list.append(["Autoclustering", autocluster_credits, autocluster_sum])
-        material_sum = float(material_df["TOTAL_DOLLARS_USED"].sum())
-        material_credits = float(material_df["TOTAL_CREDITS_USED"].sum())
+        material_sum = float(material_df["DOLLARS"].sum())
+        material_credits = float(material_df["CREDITS"].sum())
         usage_list.append(["Materialization Views", material_credits, material_sum])
-        replication_sum = float(replication_df["TOTAL_DOLLARS_USED"].sum())
-        replication_credits = float(replication_df["TOTAL_CREDITS_USED"].sum())
+        replication_sum = float(replication_df["DOLLARS"].sum())
+        replication_credits = float(replication_df["CREDITS"].sum())
         usage_list.append(["Replication", replication_credits, replication_sum])
-        searchopt_sum = float(searchopt_df["TOTAL_DOLLARS_USED"].sum())
-        searchopt_credits = float(searchopt_df["TOTAL_CREDITS_USED"].sum())
+        searchopt_sum = float(searchopt_df["DOLLARS"].sum())
+        searchopt_credits = float(searchopt_df["CREDITS"].sum())
         usage_list.append(["Search Optimization", searchopt_credits, searchopt_sum])
-        snowpipe_sum = float(snowpipe_df["TOTAL_DOLLARS_USED"].sum())
-        snowpipe_credits = float(snowpipe_df["TOTAL_CREDITS_USED"].sum())
+        snowpipe_sum = float(snowpipe_df["DOLLARS"].sum())
+        snowpipe_credits = float(snowpipe_df["CREDITS"].sum())
         usage_list.append(["Snowpipe", snowpipe_credits, snowpipe_sum])
         sqldf = pd.DataFrame(data = usage_list, columns=["cost_category", "credits", "dollars"])
         return sqldf
@@ -197,8 +197,8 @@ class SNFLKQuery():
             credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
                 select warehouse_name
-                      ,credits_used
-                      ,({credit_val}*credits_used) as total_dollars_used
+                      ,credits_used as credits
+                      ,({credit_val}*credits) as dollars
                       ,start_time
                       ,end_time
                 from {self.dbname}.account_usage.warehouse_metering_history
@@ -225,8 +225,8 @@ class SNFLKQuery():
             credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
                 select warehouse_name
-                      ,sum(credits_used) as total_credits_used
-                      ,({credit_val}*credits_used_compute_sum) as total_dollars_used
+                      ,sum(credits_used) as credits
+                      ,({credit_val}*credits) as dollars
                 from {self.dbname}.account_usage.warehouse_metering_history
                 where start_time between '{start_date}' and '{end_date}' -->= dateadd(day, -5, current_timestamp())
                 group by 1
@@ -256,8 +256,8 @@ class SNFLKQuery():
         select database_name
               ,schema_name
               ,table_name
-              ,sum(credits_used) as credits_used
-              ,({credit_val}*credits_used) as total_dollars_used
+              ,sum(credits_used) as credits
+              ,({credit_val}*credits) as dollars
               ,start_time
               ,end_time
         from {self.dbname}.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY
@@ -289,8 +289,8 @@ class SNFLKQuery():
         select database_name
               ,schema_name
               ,table_name
-              ,sum(credits_used) as total_credits_used
-              ,({credit_val}*total_credits_used) as total_dollars_used
+              ,sum(credits_used) as credits
+              ,({credit_val}*credits) as dollars
         from {self.dbname}.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY
         where start_time between '{start_date}' and '{end_date}'
         group by 1,2,3
@@ -317,8 +317,8 @@ class SNFLKQuery():
         sql = f"""
         SELECT DISTINCT
                 WMH.WAREHOUSE_NAME
-                ,WMH.CREDITS_USED_CLOUD_SERVICES as CREDITS_USED
-                ,({credit_val}*CREDITS_USED) as TOTAL_DOLLARS_USED
+                ,WMH.CREDITS_USED_CLOUD_SERVICES as credits
+                ,({credit_val}*credits) as dollars
                 ,WMH.START_TIME
                 ,WMH.END_TIME
         from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH where WMH.START_TIME between '{start_date}' and '{end_date}' order by 4 asc;
@@ -343,8 +343,8 @@ class SNFLKQuery():
         sql = f"""
         SELECT DISTINCT
                 WMH.WAREHOUSE_NAME
-                ,SUM(WMH.CREDITS_USED_CLOUD_SERVICES) as TOTAL_CREDITS_USED
-                ,({credit_val}*TOTAL_CREDITS_USED) as TOTAL_DOLLARS_USED
+                ,SUM(WMH.CREDITS_USED_CLOUD_SERVICES) as credits
+                ,({credit_val}*credits) as dollars
         from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH
         where WMH.START_TIME between '{start_date}' and '{end_date}' group by 1 order by 1 asc
         """
@@ -370,11 +370,12 @@ class SNFLKQuery():
         sql = f"""
         SELECT DISTINCT
                 WMH.WAREHOUSE_NAME
-                ,WMH.CREDITS_USED_COMPUTE as CREDITS_USED
-                ,({credit_val}*CREDITS_USED) as total_dollars_used
+                ,WMH.CREDITS_USED_COMPUTE as credits
+                ,({credit_val}*credits) as dollars
                 ,WMH.START_TIME
                 ,WMH.END_TIME
-        from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH where WMH.START_TIME between '{start_date}' and '{end_date}' order by 4 asc;
+        from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH
+        where WMH.START_TIME between '{start_date}' and '{end_date}' order by 4 asc;
         """
         return self.query_to_df(sql)
 
@@ -395,8 +396,8 @@ class SNFLKQuery():
         sql = f"""
         SELECT DISTINCT
                 WMH.WAREHOUSE_NAME
-                ,sum(WMH.CREDITS_USED_COMPUTE) as TOTAL_CREDITS_USED
-                ,({credit_val}*TOTAL_CREDITS_USED) as TOTAL_DOLLARS_USED
+                ,sum(WMH.CREDITS_USED_COMPUTE) as credits
+                ,({credit_val}*credits) as dollars
         from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH
         where WMH.START_TIME between '{start_date}' and '{end_date}' group by 1 order by 1 asc
         """
@@ -426,8 +427,8 @@ class SNFLKQuery():
             database_name
             ,schema_name
             ,table_name
-            ,credits_used
-            ,({credit_val}*credits_used) as total_dollars_used
+            ,credits_used as credits
+            ,({credit_val}*credits) as dollars
             ,start_time
             ,end_time
         from {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY
@@ -458,8 +459,8 @@ class SNFLKQuery():
             database_name
             ,schema_name
             ,table_name
-            ,IFNULL(sum(credits_used), NULL) as total_credits_used
-            ,IFNULL(({credit_val}*total_credits_used), NULL) as total_dollars_used
+            ,IFNULL(sum(credits_used), NULL) as credits
+            ,IFNULL(({credit_val}*credits), NULL) as dollars
         from {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY
         where start_time between '{start_date}' and '{end_date}'
         group by 1,2,3
@@ -485,8 +486,8 @@ class SNFLKQuery():
         sql = f"""
         select
             database_name
-            ,credits_used
-            ,({credit_val}*credits_used) as total_dollars_used
+            ,credits_used as credits
+            ,({credit_val}*credits) as dollars
             ,start_time
             ,end_time
         from {self.dbname}.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY
@@ -514,8 +515,8 @@ class SNFLKQuery():
         sql = f"""
         select
             database_name
-            ,sum(credits_used) as total_credits_used
-            ,({credit_val}*total_credits_used) as total_dollars_used
+            ,sum(credits_used) as credits
+            ,({credit_val}*credits) as dollars
         from {self.dbname}.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY
         where start_time between '{start_date}' and '{end_date}'
         group by 1
@@ -545,8 +546,8 @@ class SNFLKQuery():
              database_name
              ,schema_name
              ,table_name
-             ,sum(credits_used) as credits_used
-             ,({credit_val}*credits_used) as total_dollars_used
+             ,sum(credits_used) as credits
+             ,({credit_val}*credits) as dollars
          from {self.dbname}.ACCOUNT_USAGE.SEARCH_OPTIMIZATION_HISTORY
          where start_time between '{start_date}' and '{end_date}'
          group by 1,2,3,5
@@ -576,8 +577,8 @@ class SNFLKQuery():
              database_name
              ,schema_name
              ,table_name
-             ,sum(credits_used) as total_credits_used
-             ,({credit_val}*credits_used) as total_dollars_used
+             ,sum(credits_used) as credits
+             ,({credit_val}*credits) as dollars
          from {self.dbname}.ACCOUNT_USAGE.SEARCH_OPTIMIZATION_HISTORY
          where start_time between '{start_date}' and '{end_date}'
          group by 1,2,3,5
@@ -605,10 +606,10 @@ class SNFLKQuery():
         sql = f"""
           select
             pipe_name
-            ,credits_used
+            ,credits_used as credits
             ,start_time
             ,end_time
-            ,({credit_val}*credits_used) as total_dollars_used
+            ,({credit_val}*credits) as dollars
           from {self.dbname}.ACCOUNT_USAGE.PIPE_USAGE_HISTORY
           where start_time between '{start_date}' and '{end_date}'
           order by 1 desc;
@@ -626,6 +627,7 @@ class SNFLKQuery():
         Total dollars used: Total cost of credits (in dollars) used during a
         selected billing period calculated according to selected account type
         """
+        print("executing snowpipe")
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -635,8 +637,8 @@ class SNFLKQuery():
         sql = f"""
           select
             pipe_name
-            ,sum(credits_used) as total_credits_used
-            ,({credit_val}*credits_used) as total_dollars_used
+            ,sum(credits_used) as credits
+            ,({credit_val}*credits) as dollars
           from {self.dbname}.ACCOUNT_USAGE.PIPE_USAGE_HISTORY
           where start_time between '{start_date}' and '{end_date}'
           group by 1, 3
@@ -657,12 +659,12 @@ class SNFLKQuery():
             today_date = date.today()
             end_date = str(today_date)
         sql = f"""
-         select cost.category_name, cost.USAGE_DATE, cost.DOLLARS_USED,
-        sum(SUM(DOLLARS_USED)) OVER (order by cost.USAGE_DATE ASC) as Cumulative_Credits_Total from (
+         select cost.category_name, cost.USAGE_DATE, cost.DOLLARS_USED as dollars,
+        sum(SUM(DOLLARS_USED)) OVER (order by cost.USAGE_DATE ASC) as cumulative_credits_total from (
         SELECT
                 'Storage' AS category_name
                 ,SU.USAGE_DATE
-                ,((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23)/DA.DAYS_IN_MONTH AS DOLLARS_USED
+                ,((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23)/DA.DAYS_IN_MONTH as DOLLARS_USED
         from    {self.dbname}.ACCOUNT_USAGE.STORAGE_USAGE SU
         JOIN    (SELECT COUNT(*) AS DAYS_IN_MONTH,TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01') as DATE_MONTH
         FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM
