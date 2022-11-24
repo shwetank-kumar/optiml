@@ -8,19 +8,24 @@ class SNFLKQuery():
     "enterprise": 3,
     "business critical": 4
     }
+    # set first value below for int
+    data_type_map = ['float','float','string','datetime','datetime','string','datetime',
+    'datetime','datetime','string','list','bytes','datetime','bool']
     def __init__(self, connection, dbname, credit_value="standard"):
         self.connection = connection
         self.dbname = dbname
         self.credit_value = credit_value
 
     def query_to_df(self, sql):
-        data_one = self.connection.cursor().execute(sql).fetch_pandas_all()
-        if 'CREDITS' in data_one:
-            data_one['CREDITS'] = data_one['CREDITS'].astype(float)
-
-        if 'DOLLARS' in data_one:
-            data_one['DOLLARS'] = data_one['DOLLARS'].astype(float)
-
+        cursor_obj = self.connection.cursor()
+        data_one = cursor_obj.execute(sql).fetch_pandas_all()
+        dt_type = {}
+        for dd in cursor_obj.description:
+            if SNFLKQuery.data_type_map[dd[1]] == "datetime":
+                data_one[dd[0]] = pd.to_datetime(data_one[dd[0]])
+            else:
+                dt_type[dd[0]] = SNFLKQuery.data_type_map[dd[1]]
+                data_one.astype(dt_type)
         return data_one
 
     def total_cost_breakdown(self, start_date='2022-01-01', end_date=''):
