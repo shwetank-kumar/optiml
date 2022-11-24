@@ -1,4 +1,5 @@
 from datetime import date
+import pandas as pd
 
 
 class SNFLKQuery():
@@ -16,98 +17,67 @@ class SNFLKQuery():
         return self.connection.cursor().execute(sql).fetch_pandas_all()
 
     def total_cost_breakdown(self, start_date='2022-01-01', end_date=''):
-        ##TODO Update docstring
-        #TODO Write funcion
-        """Compute	Credits and $
-            Storage	Null and $
-            Cloud Services	Credits and $
-            Autoclustering	Credits and $
-            Materialized view	Credits and $
-            Search Optimization 	Credits and $
-            Snowpipe usage	Credits and $
-            Replication	Credits and $"""
+        """
+        Calculates the total credits consumed in a selected time period grouped by
+        services consuming the credits along with cost of credits consumed calculated
+        according to selected account type.
+        Outputs a dataframe with the following columns and rows:
+        Cost Category: Name of the service consuming the credit
+        Total Credits: Total credits used during the billing period
+        TOTAL_DOLLARS_USED: Total cost of credits (in dollars) used during a
+        selected billing period calculated according to selected account type.
+        Following are the rows returned:
+        Compute: Total cost of compute used during the billing period
+        Storage: Total cost of storage used during the billing period
+        Cloud Services: Total cost of cloud services used during the billing period
+        Autoclustering: Total cost of autoclustering events during the billing period
+        Materialized view: Total cost consumed by materialized view during the billing period
+        Search Optimization: Total cost of search optimization used during the billing period
+        Snowpipe: Total cost of snowpipe usage during the billing period
+        Replication: Total cost of replication done during the billing period
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
         credit_val = ''
         if self.credit_value:
             credit_val = SNFLKQuery.credit_values[self.credit_value]
-        sql = f"""
-            SELECT
-                'STORAGE' AS COST_CATEGORY
-                ,NULL as TOTAL_CREDITS
-                ,IFNULL(sum(((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23)/DA.DAYS_IN_MONTH), NULL) AS TOTAL_DOLLARS_USED
-            from    {self.dbname}.ACCOUNT_USAGE.STORAGE_USAGE SU
-            JOIN    (SELECT COUNT(*) AS DAYS_IN_MONTH,TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01') as DATE_MONTH
-            FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM
-            GROUP BY TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01')) DA
-            ON DA.DATE_MONTH = TO_DATE(DATE_PART('year',USAGE_DATE)||'-'||DATE_PART('month',USAGE_DATE)||'-01')
-            where SU.USAGE_DATE between '{start_date}' and '{end_date}' group by 1
+        usage_list = []
+        storage_df = self.cost_of_storage_ts(start_date, end_date)
+        compute_df = self.cost_of_compute(start_date, end_date)
+        cloud_service_df = self.cost_of_cloud_services(start_date, end_date)
+        material_df = self.cost_of_materialized_views(start_date, end_date)
+        replication_df = self.cost_of_replication(start_date, end_date)
+        searchopt_df = self.cost_of_searchoptimization(start_date, end_date)
+        snowpipe_df = self.cost_of_snowpipe(start_date, end_date)
+        autocluster_df = self.cost_of_autoclustering(start_date, end_date)
 
-            UNION
-
-            SELECT DISTINCT
-                    'COMPUTE' as COST_CATEGORY
-                    ,IFNULL(sum(WMH.CREDITS_USED_COMPUTE), NULL) as TOTAL_CREDITS_USED
-                    ,IFNULL(({credit_val}*TOTAL_CREDITS_USED), NULL) as TOTAL_DOLLARS_USED
-            from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH
-            where WMH.START_TIME between '{start_date}' and '{end_date}' group by 1
-
-            UNION
-
-            SELECT DISTINCT
-                    'CLOUD SERVICES' AS COST_CATEGORY
-                    ,IFNULL(SUM(WMH.CREDITS_USED_CLOUD_SERVICES), NULL) as TOTAL_CREDITS_USED
-                    ,IFNULL(({credit_val}*TOTAL_CREDITS_USED), NULL) AS TOTAL_DOLLARS_USED
-            from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH
-            where WMH.START_TIME between '{start_date}' and '{end_date}' group by 1
-
-            UNION
-
-            select
-                'AUTOCLUSTERING' AS COST_CATEGORY,
-                IFNULL(sum(credits_used), NULL) AS TOTAL_CREDITS_USED,
-                IFNULL(({credit_val}*total_credits_used), NULL) AS TOTAL_DOLLARS_USED
-            from {self.dbname}.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY
-            where start_time between '{start_date}' and '{end_date}'
-
-            UNION
-
-            SELECT
-                'SNOWPIPE' AS COST_CATEGORY
-                ,IFNULL(SUM(PUH.CREDITS_USED), NULL) as TOTAL_CREDITS_USED
-                ,IFNULL(({credit_val}*TOTAL_CREDITS_USED), NULL) AS TOTAL_DOLLARS_USED
-            from {self.dbname}.ACCOUNT_USAGE.PIPE_USAGE_HISTORY PUH
-            where start_time between '{start_date}' and '{end_date}'
-
-            UNION
-
-            select
-                'MATERIALIZED VIEW' AS COST_CATEGORY
-                ,IFNULL(SUM(MVH.credits_used), NULL) AS TOTAL_CREDITS_USED
-                ,IFNULL(({credit_val}*TOTAL_CREDITS_USED), NULL) AS TOTAL_DOLLARS_USED
-            from {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY MVH
-            where start_time between '{start_date}' and '{end_date}'
-
-            UNION
-
-            select
-                'REPLICATION' AS COST_CATEGORY
-                ,IFNULL(SUM(RUH.credits_used), NULL) AS TOTAL_CREDITS_USED
-                ,IFNULL(({credit_val}*TOTAL_CREDITS_USED), NULL) AS TOTAL_DOLLARS_USED
-            from {self.dbname}.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY RUH
-            where start_time between '{start_date}' and '{end_date}'
-
-            UNION
-
-            select
-                'SEARCH OPTIMIZATION HISTORY' AS COST_CATEGORY
-                ,IFNULL(SUM(SOH.credits_used), NULL) AS TOTAL_CREDITS_USED
-                ,IFNULL(({credit_val}*TOTAL_CREDITS_USED), NULL) AS TOTAL_DOLLARS_USED
-            from {self.dbname}.ACCOUNT_USAGE.SEARCH_OPTIMIZATION_HISTORY SOH
-            where start_time between '{start_date}' and '{end_date}'
-        """
-        return self.query_to_df(sql)
+        storage_sum = float(storage_df["DOLLARS_USED"].sum())
+        storage_credits = 0
+        usage_list.append(["Storage", storage_credits, storage_sum])
+        compute_sum = float(compute_df["TOTAL_DOLLARS_USED"].sum())
+        compute_credits = float(compute_df["TOTAL_CREDITS_USED"].sum())
+        usage_list.append(["Compute", compute_credits, compute_sum])
+        cloud_service_sum = float(cloud_service_df["TOTAL_DOLLARS_USED"].sum())
+        cloud_services_credits = float(cloud_service_df["TOTAL_CREDITS_USED"].sum())
+        usage_list.append(["Cloud Service", cloud_services_credits, cloud_service_sum])
+        autocluster_sum = float(autocluster_df["TOTAL_DOLLARS_USED"].sum())
+        autocluster_credits = float(autocluster_df["TOTAL_CREDITS_USED"].sum())
+        usage_list.append(["Autoclustering", autocluster_credits, autocluster_sum])
+        material_sum = float(material_df["TOTAL_DOLLARS_USED"].sum())
+        material_credits = float(material_df["TOTAL_CREDITS_USED"].sum())
+        usage_list.append(["Materialization Views", material_credits, material_sum])
+        replication_sum = float(replication_df["TOTAL_DOLLARS_USED"].sum())
+        replication_credits = float(replication_df["TOTAL_CREDITS_USED"].sum())
+        usage_list.append(["Replication", replication_credits, replication_sum])
+        searchopt_sum = float(searchopt_df["TOTAL_DOLLARS_USED"].sum())
+        searchopt_credits = float(searchopt_df["TOTAL_CREDITS_USED"].sum())
+        usage_list.append(["Search Optimization", searchopt_credits, searchopt_sum])
+        snowpipe_sum = float(snowpipe_df["TOTAL_DOLLARS_USED"].sum())
+        snowpipe_credits = float(snowpipe_df["TOTAL_CREDITS_USED"].sum())
+        usage_list.append(["Snowpipe", snowpipe_credits, snowpipe_sum])
+        sqldf = pd.DataFrame(data = usage_list, columns=["Cost Category", "Credits", "Dollars"])
+        return sqldf
 
     # def cost_by_usage(self, start_date='2022-01-01', end_date=''):
     #     ##TODO Update docstring
@@ -262,7 +232,17 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_by_wh_ts(self, start_date='2022-01-01', end_date=''):
-        ##TODO Update docstring
+        """Calculates the total cost of compute and cloud services in a time
+        series according to warehouse for a given time period using Warehouse
+        Metering History table.
+        Outputs a dataframe with the following columns:
+        Warehouse Name: Name of the Warehouse
+        Credits used: Total credits used during the billing period
+        TOTAL_DOLLARS_USED: Total cost of credits (in dollars) used during a
+        selected billing period calculated according to selected account type
+        Start time: The start time of the billing period
+        End time: The end time of the billing period
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -283,7 +263,14 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_by_wh(self, start_date='2022-01-01', end_date=''):
-        ##TODO Update docstring
+        """Calculates the total cost of compute and cloud services according to
+        warehouse for a given time period using Warehouse Metering History table.
+        Outputs a dataframe with the following columns:
+        Warehouse Name: Name of the Warehouse
+        Total credits used: Total credits used during the billing period
+        TOTAL_DOLLARS_USED: Total cost of credits (in dollars) used during a
+        selected billing period calculated according to selected account type
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -292,7 +279,7 @@ class SNFLKQuery():
             credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
                 select warehouse_name
-                      ,sum(credits_used) as credits_used_compute_sum
+                      ,sum(credits_used) as total_credits_used
                       ,({credit_val}*credits_used_compute_sum) as total_dollars_used
                 from {self.dbname}.account_usage.warehouse_metering_history
                 where start_time between '{start_date}' and '{end_date}' -->= dateadd(day, -5, current_timestamp())
@@ -302,7 +289,7 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_autoclustering_ts(self, start_date='2022-01-01', end_date=''):
-        """Calculates the overall cost of autoclustering for a given time period using Automatic
+        """Calculates the cost of autoclustering in time series for a given time period using Automatic
         Clustering History table. Outputs a dataframe with the following columns:
         Start time: The start time of the billing period
         End time: The end time of the billing period
@@ -310,6 +297,8 @@ class SNFLKQuery():
         Schema name: The schema name of the table that was clustered
         Table name: The name of the table that was clustered
         Total credits used: Total credits used during the billing period
+        TOTAL_DOLLARS_USED: Total cost of credits (in dollars) used during a
+        selected billing period calculated according to selected account type
         """
         if not end_date:
             today_date = date.today()
@@ -341,6 +330,8 @@ class SNFLKQuery():
         Schema name: The schema name of the table that was clustered
         Table name: The name of the table that was clustered
         Total credits used: Total credits used during the billing period
+        TOTAL_DOLLARS_USED: Total cost of credits (in dollars) used during a
+        selected billing period calculated according to selected account type
         """
         if not end_date:
             today_date = date.today()
@@ -362,7 +353,15 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_cloud_services_ts(self, start_date='2022-01-01', end_date=''):
-        ##TODO Update docstring
+        """Calculates the cost of cloud services in time series for a given time period using Snowflake Warehouse
+        Metering History tables. Outputs a dataframe with the following columns:
+        WAREHOUSE_NAME: Name of the warehouse
+        CREDITS_USED: Cloud Services Credits used during a selected billing period
+        TOTAL_DOLLARS_USED: Total cost of credits (in dollars) used during a
+        selected billing period calculated according to selected account type
+        START_TIME: Start date and time of the billing period
+        END_TIME: End date and time of the billing period
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -373,7 +372,7 @@ class SNFLKQuery():
         SELECT DISTINCT
                 WMH.WAREHOUSE_NAME
                 ,WMH.CREDITS_USED_CLOUD_SERVICES as CREDITS_USED
-                ,({credit_val}*CREDITS_USED) as total_dollars_used
+                ,({credit_val}*CREDITS_USED) as TOTAL_DOLLARS_USED
                 ,WMH.START_TIME
                 ,WMH.END_TIME
         from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH where WMH.START_TIME between '{start_date}' and '{end_date}' order by 4 asc;
@@ -382,7 +381,13 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_cloud_services(self, start_date='2022-01-01', end_date=''):
-        ##TODO Update docstring
+        """Calculates the overall cost of cloud services for a given time period using Snowflake Warehouse
+        Metering History tables. Outputs a dataframe with the following columns:
+        WAREHOUSE_NAME: Name of the warehouse
+        TOTAL_CREDITS_USED: Total cloud services credits used during a selected billing period
+        TOTAL_DOLLARS_USED: Total cost of cloud services credits (in dollars) used during a
+        selected billing period calculated according to selected account type
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -393,7 +398,7 @@ class SNFLKQuery():
         SELECT DISTINCT
                 WMH.WAREHOUSE_NAME
                 ,SUM(WMH.CREDITS_USED_CLOUD_SERVICES) as TOTAL_CREDITS_USED
-                ,({credit_val}*TOTAL_CREDITS_USED) as total_dollars_used
+                ,({credit_val}*TOTAL_CREDITS_USED) as TOTAL_DOLLARS_USED
         from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH
         where WMH.START_TIME between '{start_date}' and '{end_date}' group by 1 order by 1 asc
         """
@@ -401,13 +406,14 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_compute_ts(self, start_date='2022-01-01', end_date=''):
-        """Calculates the overall cost of compute for a given time period using Snowflake Warehouse
+        """Calculates the cost of compute in time series for a given time period using Snowflake Warehouse
         Metering History tables. Outputs a dataframe with the following columns:
+        Warehouse Name: Name of the warehouse
+        credits used: Compute credits used during the billing period
         Start time: The start time of the billing period
         End time: The end time of the billing period
-        Total credits used: Total credits used during the billing period
-        Compute credits used: Compute credits used during the billing period
-        Cloud services credits used: Cloud services credits used to support the compute
+        TOTAL_DOLLARS_USED: Total cost of credits (in dollars) used during a
+        selected billing period calculated according to selected account type
         """
         if not end_date:
             today_date = date.today()
@@ -429,11 +435,10 @@ class SNFLKQuery():
     def cost_of_compute(self, start_date='2022-01-01', end_date=''):
         """Calculates the overall cost of compute for a given time period using Snowflake Warehouse
         Metering History tables. Outputs a dataframe with the following columns:
-        Start time: The start time of the billing period
-        End time: The end time of the billing period
-        Total credits used: Total credits used during the billing period
-        Compute credits used: Compute credits used during the billing period
-        Cloud services credits used: Cloud services credits used to support the compute
+        Warehouse Name: Name of the warehouse
+        Total credits used: Compute credits used during the billing period
+        TOTAL_DOLLARS_USED: Total cost of credits (in dollars) used during a
+        selected billing period calculated according to selected account type
         """
         if not end_date:
             today_date = date.today()
@@ -452,7 +457,18 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_materialized_views_ts(self, start_date='2022-01-01', end_date=''):
-        ##TODO Update docstring
+        """Calculates the overall cost of materialized views in time series for a given time
+        period using Materialized View Refresh History table.
+        Outputs a dataframe with the following columns:
+        Start time: The start time of the billing period
+        End time: The end time of the billing period
+        Database name: The database name of the table
+        Schema name: The schema name of the table that was clustered
+        Table name: The name of the table that was clustered
+        Total credits used: Total credits used during the billing period
+        TOTAL_DOLLARS_USED: Total cost of credits (in dollars) used during a
+        selected billing period calculated according to selected account type
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -475,7 +491,16 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_materialized_views(self, start_date='2022-01-01', end_date=''):
-        ##TODO Update docstring
+        """Calculates the overall cost of materialized views for a given time
+        period using Materialized View Refresh History table.
+        Outputs a dataframe with the following columns:
+        Database name: The database name of the table
+        Schema name: The schema name of the table that was used for materialized views
+        Table name: The name of the table that was used for materialized views
+        Total credits used: Total credits used during the billing period
+        TOTAL_DOLLARS_USED: Total cost of credits (in dollars) used during a
+        selected billing period calculated according to selected account type
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -487,16 +512,24 @@ class SNFLKQuery():
             database_name
             ,schema_name
             ,table_name
-            ,sum(credits_used) as credits_used
-            ,({credit_val}*credits_used) as total_dollars_used
+            ,IFNULL(sum(credits_used), NULL) as total_credits_used
+            ,IFNULL(({credit_val}*total_credits_used), NULL) as total_dollars_used
         from {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY
         where start_time between '{start_date}' and '{end_date}'
-        group by 1,2,3,5
+        group by 1,2,3
         order by 1 asc;
         """
         return self.query_to_df(sql)
 
     def cost_of_replication_ts(self, start_date='2022-01-01', end_date=''):
+        """Calculates the cost of replication in time series used in a given time
+        period using Replication Usage History table.
+        Outputs a dataframe with the following columns:
+        Database name: The database name of the table
+        Total credits used: Total credits used during the billing period
+        TOTAL_DOLLARS_USED: Total cost of credits (in dollars) used during a
+        selected billing period calculated according to selected account type
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -518,7 +551,14 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_replication(self, start_date='2022-01-01', end_date=''):
-        ##TODO Update docstring
+        """Calculates the overall cost of replication used in a given time
+        period using Replication Usage History table.
+        Outputs a dataframe with the following columns:
+        Database name: The database name of the table
+        Total credits used: Total credits used during the billing period
+        TOTAL_DOLLARS_USED: Total cost of credits (in dollars) used during a
+        selected billing period calculated according to selected account type
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -528,18 +568,26 @@ class SNFLKQuery():
         sql = f"""
         select
             database_name
-            ,sum(credits_used) as credits_used
-            ,({credit_val}*credits_used) as total_dollars_used
+            ,sum(credits_used) as total_credits_used
+            ,({credit_val}*total_credits_used) as total_dollars_used
         from {self.dbname}.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY
         where start_time between '{start_date}' and '{end_date}'
-        group by 1, 3
+        group by 1
         order by 1 asc;
         """
 
         return self.query_to_df(sql)
 
     def cost_of_searchoptimization_ts(self, start_date='2022-01-01', end_date=''):
-        ##TODO Update docstring
+        """Calculates the cost of search optimizations in time series used in a
+        given time period using Search Optimization History table.
+        Outputs a dataframe with the following columns:
+        Database name: The database name of the table on which search optimization is applied
+        Schema name: The schema name on which search optimization is applied
+        Total credits used: Total credits used during the billing period
+        TOTAL_DOLLARS_USED: Total cost of credits (in dollars) used during a
+        selected billing period calculated according to selected account type
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -562,7 +610,15 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_searchoptimization(self, start_date='2022-01-01', end_date=''):
-        ##TODO Update docstring
+        """Calculates the overall cost of search optimizations used in a
+        given time period using Search Optimization History table.
+        Outputs a dataframe with the following columns:
+        Database name: The database name of the table on which search optimization is applied
+        Schema name: The schema name on which search optimization is applied
+        Credits used: Total credits used during the billing period
+        TOTAL_DOLLARS_USED: Total cost of credits (in dollars) used during a
+        selected billing period calculated according to selected account type
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -574,7 +630,7 @@ class SNFLKQuery():
              database_name
              ,schema_name
              ,table_name
-             ,sum(credits_used) as credits_used
+             ,sum(credits_used) as total_credits_used
              ,({credit_val}*credits_used) as total_dollars_used
          from {self.dbname}.ACCOUNT_USAGE.SEARCH_OPTIMIZATION_HISTORY
          where start_time between '{start_date}' and '{end_date}'
@@ -584,7 +640,16 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_snowpipe_ts(self, start_date='2022-01-01', end_date=''):
-        ##TODO Update docstring
+        """Calculates the cost of snowpipe usage in time series in a
+        given time period using Pipe Usage History table.
+        Outputs a dataframe with the following columns:
+        Pipe name: Name of the snowpipe used
+        Start time: The start date and time of the billing period
+        End time: The end date and time of the billing period
+        Credits used: Total credits used during the billing period
+        TOTAL_DOLLARS_USED: Total cost of credits (in dollars) used during a
+        selected billing period calculated according to selected account type
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -605,7 +670,16 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_snowpipe(self, start_date='2022-01-01', end_date=''):
-        ##TODO Update docstring
+        """Calculates the overall cost of snowpipe usage in a
+        given time period using Pipe Usage History table.
+        Outputs a dataframe with the following columns:
+        Pipe name: Name of the snowpipe used
+        Start time: The start date and time of the billing period
+        End time: The end date and time of the billing period
+        Credits used: Total credits used during the billing period
+        Total dollars used: Total cost of credits (in dollars) used during a
+        selected billing period calculated according to selected account type
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -615,7 +689,7 @@ class SNFLKQuery():
         sql = f"""
           select
             pipe_name
-            ,sum(credits_used) as credits_used
+            ,sum(credits_used) as total_credits_used
             ,({credit_val}*credits_used) as total_dollars_used
           from {self.dbname}.ACCOUNT_USAGE.PIPE_USAGE_HISTORY
           where start_time between '{start_date}' and '{end_date}'
@@ -625,15 +699,22 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_storage_ts(self, start_date='2022-01-01', end_date=''):
-        ##TODO Update docstring
+        """
+        Calculates the overall cost of storage usage in time series in a
+        given time period using Storage Usage Su table.
+        Outputs a dataframe with the following columns:
+        Category name: Category name as Storage
+        Usage date: The date on which storage is used
+        Dollars used: Total cost of storage (in dollars) used
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
         sql = f"""
-         select cost.WAREHOUSE_NAME, cost.USAGE_DATE, cost.DOLLARS_USED,
+         select cost.category_name, cost.USAGE_DATE, cost.DOLLARS_USED,
         sum(SUM(DOLLARS_USED)) OVER (order by cost.USAGE_DATE ASC) as Cumulative_Credits_Total from (
         SELECT
-                'Storage' AS WAREHOUSE_NAME
+                'Storage' AS category_name
                 ,SU.USAGE_DATE
                 ,((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23)/DA.DAYS_IN_MONTH AS DOLLARS_USED
         from    {self.dbname}.ACCOUNT_USAGE.STORAGE_USAGE SU
