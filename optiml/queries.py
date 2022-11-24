@@ -15,58 +15,74 @@ class SNFLKQuery():
     def query_to_df(self, sql):
         return self.connection.cursor().execute(sql).fetch_pandas_all()
 
-    def cost_by_usage(self, start_date='2022-01-01', end_date=''):
-        if not end_date:
-            today_date = date.today()
-            end_date = str(today_date)
-            print(end_date)
-        credit_val = ''
-        if self.credit_value:
-            credit_val = SNFLKQuery.credit_values[self.credit_value]
-        sql = f"""
-            with cte_date_wh as (
-              select
-                  warehouse_name
-                  ,sum(credits_used) as credits_used_date_wh
-                  ,start_time
-                  ,end_time
-              from {self.dbname}.account_usage.warehouse_metering_history
-              group by start_time, warehouse_name, end_time
-            )
-            select
-                  warehouse_name
-                  ,sum(credits_used_date_wh) as total_credits_used
-                  ,({credit_val}*total_credits_used) as total_dollars_used
-            from cte_date_wh where start_time between '{start_date}' and '{end_date}' group by warehouse_name;
-            """
-        return self.query_to_df(sql)
+    def total_cost_breakdown(self, start_date='2022-01-01', end_date=''):
+        ##TODO Update docstring
+        #TODO Write funcion
+        """Compute	Credits and $
+            Storage	Null and $
+            Cloud Services	Credits and $
+            Autoclustering	Credits and $
+            Materialized view	Credits and $
+            Search Optimization 	Credits and $
+            Snowpipe usage	Credits and $
+            Replication	Credits and $"""
+        pass
+    
+    # def cost_by_usage(self, start_date='2022-01-01', end_date=''):
+    #     ##TODO Update docstring
+    #     ##TODO Why is this giving cost by warehouse use?
+    #     if not end_date:
+    #         today_date = date.today()
+    #         end_date = str(today_date)
+    #         print(end_date)
+    #     credit_val = ''
+    #     if self.credit_value:
+    #         credit_val = SNFLKQuery.credit_values[self.credit_value]
+    #     sql = f"""
+    #         with cte_date_wh as (
+    #           select
+    #               warehouse_name
+    #               ,sum(credits_used) as credits_used_date_wh
+    #               ,start_time
+    #               ,end_time
+    #           from {self.dbname}.account_usage.warehouse_metering_history
+    #           group by start_time, warehouse_name, end_time
+    #         )
+    #         select
+    #               warehouse_name
+    #               ,sum(credits_used_date_wh) as total_credits_used
+    #               ,({credit_val}*total_credits_used) as total_dollars_used
+    #         from cte_date_wh where start_time between '{start_date}' and '{end_date}' group by warehouse_name;
+    #         """
+    #     return self.query_to_df(sql)
 
-    def cost_by_usage_ts(self, start_date='2022-01-01', end_date=''):
-        if not end_date:
-            today_date = date.today()
-            end_date = str(today_date)
-        credit_val = ''
-        if self.credit_value:
-            credit_val = SNFLKQuery.credit_values[self.credit_value]
-        sql = f"""
-            with cte_date_wh as(
-              select
-                  warehouse_name
-                  ,sum(credits_used) as credits_used_date_wh
-                  ,start_time
-                  ,end_time
-              from {self.dbname}.account_usage.warehouse_metering_history
-              group by start_time,warehouse_name,end_time
-            )
-            select
-                  warehouse_name
-                  ,credits_used_date_wh
-                  ,({credit_val}*credits_used_date_wh) as total_dollars_used
-                  ,start_time
-                  ,end_time
-            from cte_date_wh where start_time between '{start_date}' and '{end_date}' order by start_time;
-            """
-        return self.query_to_df(sql)
+    # def cost_by_usage_ts(self, start_date='2022-01-01', end_date=''):
+    #     ##TODO Update docstring
+    #     if not end_date:
+    #         today_date = date.today()
+    #         end_date = str(today_date)
+    #     credit_val = ''
+    #     if self.credit_value:
+    #         credit_val = SNFLKQuery.credit_values[self.credit_value]
+    #     sql = f"""
+    #         with cte_date_wh as(
+    #           select
+    #               warehouse_name
+    #               ,sum(credits_used) as credits_used_date_wh
+    #               ,start_time
+    #               ,end_time
+    #           from {self.dbname}.account_usage.warehouse_metering_history
+    #           group by start_time,warehouse_name,end_time
+    #         )
+    #         select
+    #               warehouse_name
+    #               ,credits_used_date_wh
+    #               ,({credit_val}*credits_used_date_wh) as total_dollars_used
+    #               ,start_time
+    #               ,end_time
+    #         from cte_date_wh where start_time between '{start_date}' and '{end_date}' order by start_time;
+    #         """
+    #     return self.query_to_df(sql)
 
     def cost_by_user_ts(self, start_date, end_date):
         ini_date = ""
@@ -165,6 +181,7 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_by_wh_ts(self, start_date='2022-01-01', end_date=''):
+        ##TODO Update docstring
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -185,6 +202,7 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_by_wh(self, start_date='2022-01-01', end_date=''):
+        ##TODO Update docstring
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -260,23 +278,10 @@ class SNFLKQuery():
         group by 1,2,3
         order by 1 desc;
         """
-        # Use this:
-        # select to_date(start_time) as date
-        # ,database_name
-        # ,schema_name
-        # ,table_name
-        # ,sum(credits_used) as credits_used
-
-        # from "SNOWFLAKE"."ACCOUNT_USAGE"."AUTOMATIC_CLUSTERING_HISTORY"
-
-        # where start_time >= dateadd(month,-1,current_timestamp())
-        # group by 1,2,3,4
-        # order by 5 desc
-        # ;
-
         return self.query_to_df(sql)
 
     def cost_of_cloud_services_ts(self, start_date='2022-01-01', end_date=''):
+        ##TODO Update docstring
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -296,6 +301,7 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_cloud_services(self, start_date='2022-01-01', end_date=''):
+        ##TODO Update docstring
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -365,6 +371,7 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_materialized_views_ts(self, start_date='2022-01-01', end_date=''):
+        ##TODO Update docstring
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -387,6 +394,7 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_materialized_views(self, start_date='2022-01-01', end_date=''):
+        ##TODO Update docstring
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -429,6 +437,7 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_replication(self, start_date='2022-01-01', end_date=''):
+        ##TODO Update docstring
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -449,6 +458,7 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_searchoptimization_ts(self, start_date='2022-01-01', end_date=''):
+        ##TODO Update docstring
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -471,6 +481,7 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_searchoptimization(self, start_date='2022-01-01', end_date=''):
+        ##TODO Update docstring
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -492,6 +503,7 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_snowpipe_ts(self, start_date='2022-01-01', end_date=''):
+        ##TODO Update docstring
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -512,6 +524,7 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_snowpipe(self, start_date='2022-01-01', end_date=''):
+        ##TODO Update docstring
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -531,6 +544,7 @@ class SNFLKQuery():
         return self.query_to_df(sql)
 
     def cost_of_storage_ts(self, start_date='2022-01-01', end_date=''):
+        ##TODO Update docstring
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
