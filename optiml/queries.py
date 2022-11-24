@@ -14,8 +14,14 @@ class SNFLKQuery():
         self.credit_value = credit_value
 
     def query_to_df(self, sql):
-        ##TODO update query_to_df function to parse columns and return right type
-        return self.connection.cursor().execute(sql).fetch_pandas_all()
+        data_one = self.connection.cursor().execute(sql).fetch_pandas_all()
+        if 'CREDITS' in data_one:
+            data_one['CREDITS'] = data_one['CREDITS'].astype(float)
+
+        if 'DOLLARS' in data_one:
+            data_one['DOLLARS'] = data_one['DOLLARS'].astype(float)
+
+        return data_one
 
     def total_cost_breakdown(self, start_date='2022-01-01', end_date=''):
         """
@@ -262,7 +268,7 @@ class SNFLKQuery():
               ,end_time
         from {self.dbname}.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY
         where start_time between '{start_date}' and '{end_date}'
-        group by 1,2,3,5,6,7
+        group by 1,2,3,6,7
         order by 6 desc;
         """
         return self.query_to_df(sql)
@@ -550,7 +556,7 @@ class SNFLKQuery():
              ,({credit_val}*credits) as dollars
          from {self.dbname}.ACCOUNT_USAGE.SEARCH_OPTIMIZATION_HISTORY
          where start_time between '{start_date}' and '{end_date}'
-         group by 1,2,3,5
+         group by 1,2,3
          order by 1 desc;
         """
 
@@ -581,7 +587,7 @@ class SNFLKQuery():
              ,({credit_val}*credits) as dollars
          from {self.dbname}.ACCOUNT_USAGE.SEARCH_OPTIMIZATION_HISTORY
          where start_time between '{start_date}' and '{end_date}'
-         group by 1,2,3,5
+         group by 1,2,3
          order by 1 desc;
         """
         return self.query_to_df(sql)
@@ -627,7 +633,6 @@ class SNFLKQuery():
         Total dollars used: Total cost of credits (in dollars) used during a
         selected billing period calculated according to selected account type
         """
-        print("executing snowpipe")
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -641,7 +646,7 @@ class SNFLKQuery():
             ,({credit_val}*credits) as dollars
           from {self.dbname}.ACCOUNT_USAGE.PIPE_USAGE_HISTORY
           where start_time between '{start_date}' and '{end_date}'
-          group by 1, 3
+          group by 1
           order by 1 desc;
         """
         return self.query_to_df(sql)
