@@ -14,6 +14,7 @@ class SNFLKQuery():
         self.credit_value = credit_value
 
     def query_to_df(self, sql):
+        ##TODO update query_to_df function to parse columns and return right type
         return self.connection.cursor().execute(sql).fetch_pandas_all()
 
     def total_cost_breakdown(self, start_date='2022-01-01', end_date=''):
@@ -79,61 +80,6 @@ class SNFLKQuery():
         sqldf = pd.DataFrame(data = usage_list, columns=["Cost Category", "Credits", "Dollars"])
         return sqldf
 
-    # def cost_by_usage(self, start_date='2022-01-01', end_date=''):
-    #     ##TODO Update docstring
-    #     ##TODO Why is this giving cost by warehouse use?
-    #     if not end_date:
-    #         today_date = date.today()
-    #         end_date = str(today_date)
-    #         print(end_date)
-    #     credit_val = ''
-    #     if self.credit_value:
-    #         credit_val = SNFLKQuery.credit_values[self.credit_value]
-    #     sql = f"""
-    #         with cte_date_wh as (
-    #           select
-    #               warehouse_name
-    #               ,sum(credits_used) as credits_used_date_wh
-    #               ,start_time
-    #               ,end_time
-    #           from {self.dbname}.account_usage.warehouse_metering_history
-    #           group by start_time, warehouse_name, end_time
-    #         )
-    #         select
-    #               warehouse_name
-    #               ,sum(credits_used_date_wh) as total_credits_used
-    #               ,({credit_val}*total_credits_used) as total_dollars_used
-    #         from cte_date_wh where start_time between '{start_date}' and '{end_date}' group by warehouse_name;
-    #         """
-    #     return self.query_to_df(sql)
-
-    # def cost_by_usage_ts(self, start_date='2022-01-01', end_date=''):
-    #     ##TODO Update docstring
-    #     if not end_date:
-    #         today_date = date.today()
-    #         end_date = str(today_date)
-    #     credit_val = ''
-    #     if self.credit_value:
-    #         credit_val = SNFLKQuery.credit_values[self.credit_value]
-    #     sql = f"""
-    #         with cte_date_wh as(
-    #           select
-    #               warehouse_name
-    #               ,sum(credits_used) as credits_used_date_wh
-    #               ,start_time
-    #               ,end_time
-    #           from {self.dbname}.account_usage.warehouse_metering_history
-    #           group by start_time,warehouse_name,end_time
-    #         )
-    #         select
-    #               warehouse_name
-    #               ,credits_used_date_wh
-    #               ,({credit_val}*credits_used_date_wh) as total_dollars_used
-    #               ,start_time
-    #               ,end_time
-    #         from cte_date_wh where start_time between '{start_date}' and '{end_date}' order by start_time;
-    #         """
-    #     return self.query_to_df(sql)
 
     def cost_by_user_ts(self, start_date, end_date):
         ini_date = ""
