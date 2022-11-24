@@ -26,8 +26,89 @@ class SNFLKQuery():
             Search Optimization 	Credits and $
             Snowpipe usage	Credits and $
             Replication	Credits and $"""
-        pass
-    
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
+        sql = f"""
+            SELECT
+                'STORAGE' AS COST_CATEGORY
+                ,NULL as TOTAL_CREDITS
+                ,IFNULL(sum(((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23)/DA.DAYS_IN_MONTH), NULL) AS TOTAL_DOLLARS_USED
+            from    {self.dbname}.ACCOUNT_USAGE.STORAGE_USAGE SU
+            JOIN    (SELECT COUNT(*) AS DAYS_IN_MONTH,TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01') as DATE_MONTH
+            FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM
+            GROUP BY TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01')) DA
+            ON DA.DATE_MONTH = TO_DATE(DATE_PART('year',USAGE_DATE)||'-'||DATE_PART('month',USAGE_DATE)||'-01')
+            where SU.USAGE_DATE between '{start_date}' and '{end_date}' group by 1
+
+            UNION
+
+            SELECT DISTINCT
+                    'COMPUTE' as COST_CATEGORY
+                    ,IFNULL(sum(WMH.CREDITS_USED_COMPUTE), NULL) as TOTAL_CREDITS_USED
+                    ,IFNULL(({credit_val}*TOTAL_CREDITS_USED), NULL) as TOTAL_DOLLARS_USED
+            from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH
+            where WMH.START_TIME between '{start_date}' and '{end_date}' group by 1
+
+            UNION
+
+            SELECT DISTINCT
+                    'CLOUD SERVICES' AS COST_CATEGORY
+                    ,IFNULL(SUM(WMH.CREDITS_USED_CLOUD_SERVICES), NULL) as TOTAL_CREDITS_USED
+                    ,IFNULL(({credit_val}*TOTAL_CREDITS_USED), NULL) AS TOTAL_DOLLARS_USED
+            from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH
+            where WMH.START_TIME between '{start_date}' and '{end_date}' group by 1
+
+            UNION
+
+            select
+                'AUTOCLUSTERING' AS COST_CATEGORY,
+                IFNULL(sum(credits_used), NULL) AS TOTAL_CREDITS_USED,
+                IFNULL(({credit_val}*total_credits_used), NULL) AS TOTAL_DOLLARS_USED
+            from {self.dbname}.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY
+            where start_time between '{start_date}' and '{end_date}'
+
+            UNION
+
+            SELECT
+                'SNOWPIPE' AS COST_CATEGORY
+                ,IFNULL(SUM(PUH.CREDITS_USED), NULL) as TOTAL_CREDITS_USED
+                ,IFNULL(({credit_val}*TOTAL_CREDITS_USED), NULL) AS TOTAL_DOLLARS_USED
+            from {self.dbname}.ACCOUNT_USAGE.PIPE_USAGE_HISTORY PUH
+            where start_time between '{start_date}' and '{end_date}'
+
+            UNION
+
+            select
+                'MATERIALIZED VIEW' AS COST_CATEGORY
+                ,IFNULL(SUM(MVH.credits_used), NULL) AS TOTAL_CREDITS_USED
+                ,IFNULL(({credit_val}*TOTAL_CREDITS_USED), NULL) AS TOTAL_DOLLARS_USED
+            from {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY MVH
+            where start_time between '{start_date}' and '{end_date}'
+
+            UNION
+
+            select
+                'REPLICATION' AS COST_CATEGORY
+                ,IFNULL(SUM(RUH.credits_used), NULL) AS TOTAL_CREDITS_USED
+                ,IFNULL(({credit_val}*TOTAL_CREDITS_USED), NULL) AS TOTAL_DOLLARS_USED
+            from {self.dbname}.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY RUH
+            where start_time between '{start_date}' and '{end_date}'
+
+            UNION
+
+            select
+                'SEARCH OPTIMIZATION HISTORY' AS COST_CATEGORY
+                ,IFNULL(SUM(SOH.credits_used), NULL) AS TOTAL_CREDITS_USED
+                ,IFNULL(({credit_val}*TOTAL_CREDITS_USED), NULL) AS TOTAL_DOLLARS_USED
+            from {self.dbname}.ACCOUNT_USAGE.SEARCH_OPTIMIZATION_HISTORY SOH
+            where start_time between '{start_date}' and '{end_date}'
+        """
+        return self.query_to_df(sql)
+
     # def cost_by_usage(self, start_date='2022-01-01', end_date=''):
     #     ##TODO Update docstring
     #     ##TODO Why is this giving cost by warehouse use?
