@@ -92,6 +92,44 @@ class SNFLKQuery():
         return sqldf
 
 
+    def total_cost_breakdown_ts(self, start_date='2022-01-01', end_date=''):
+        """
+        Calculates the total credits consumed in a selected time period grouped by
+        services consuming the credits along with cost of credits consumed calculated
+        according to selected account type.
+        Outputs a dataframe with the following columns and rows:
+        Cost Category: Name of the service consuming the credit
+        Total Credits: Total credits used during the billing period
+        TOTAL_DOLLARS_USED: Total cost of credits (in dollars) used during a
+        selected billing period calculated according to selected account type.
+        Following are the rows returned:
+        Compute: Total cost of compute used during the billing period
+        Storage: Total cost of storage used during the billing period
+        Cloud Services: Total cost of cloud services used during the billing period
+        Autoclustering: Total cost of autoclustering events during the billing period
+        Materialized view: Total cost consumed by materialized view during the billing period
+        Search Optimization: Total cost of search optimization used during the billing period
+        Snowpipe: Total cost of snowpipe usage during the billing period
+        Replication: Total cost of replication done during the billing period
+        """
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
+        usage_list = []
+        storage_df = self.cost_of_storage_ts(start_date, end_date)
+        compute_df = self.cost_of_compute_ts(start_date, end_date)
+        cloud_service_df = self.cost_of_cloud_services_ts(start_date, end_date)
+        material_df = self.cost_of_materialized_views_ts(start_date, end_date)
+        replication_df = self.cost_of_replication_ts(start_date, end_date)
+        searchopt_df = self.cost_of_searchoptimization_ts(start_date, end_date)
+        snowpipe_df = self.cost_of_snowpipe_ts(start_date, end_date)
+        autocluster_df = self.cost_of_autoclustering_ts(start_date, end_date)
+        ts_df = storage_df.append(compute_df)
+        return ts_df
+
     def cost_by_user_ts(self, start_date, end_date):
         ini_date = ""
         if start_date and end_date:
@@ -669,8 +707,7 @@ class SNFLKQuery():
             today_date = date.today()
             end_date = str(today_date)
         sql = f"""
-         select cost.category_name, cost.USAGE_DATE, cost.DOLLARS_USED as dollars,
-        sum(SUM(DOLLARS_USED)) OVER (order by cost.USAGE_DATE ASC) as cumulative_credits_total from (
+         select cost.category_name, cost.USAGE_DATE as start_time, cost.DOLLARS_USED as dollars from (
         SELECT
                 'Storage' AS category_name
                 ,SU.USAGE_DATE
