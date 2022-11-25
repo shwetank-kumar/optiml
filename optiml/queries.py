@@ -25,7 +25,7 @@ class SNFLKQuery():
                 data_one[dd[0]] = pd.to_datetime(data_one[dd[0]])
             else:
                 dt_type[dd[0]] = SNFLKQuery.data_type_map[dd[1]]
-                data_one.astype(dt_type)
+                data_one.astype({dd[0]: SNFLKQuery.data_type_map[dd[1]]})
         return data_one
 
     def total_cost_breakdown(self, start_date='2022-01-01', end_date=''):
