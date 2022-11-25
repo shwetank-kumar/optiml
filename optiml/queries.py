@@ -15,7 +15,7 @@ class SNFLKQuery():
         self.connection = connection
         self.dbname = dbname
         self.credit_value = credit_value
-
+    
     def query_to_df(self, sql):
         cursor_obj = self.connection.cursor()
         data_one = cursor_obj.execute(sql).fetch_pandas_all()
@@ -25,9 +25,10 @@ class SNFLKQuery():
                 data_one[dd[0]] = pd.to_datetime(data_one[dd[0]])
             else:
                 dt_type[dd[0]] = SNFLKQuery.data_type_map[dd[1]]
-                data_one.astype({dd[0]: SNFLKQuery.data_type_map[dd[1]]})
+                data_one = data_one.astype({dd[0]: SNFLKQuery.data_type_map[dd[1]]})
         return data_one
 
+        
     def total_cost_breakdown(self, start_date='2022-01-01', end_date=''):
         """
         Calculates the total credits consumed in a selected time period grouped by
