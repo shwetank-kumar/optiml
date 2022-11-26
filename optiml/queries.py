@@ -1,6 +1,8 @@
 from datetime import date
+import functools
+import os
 import pandas as pd
-
+import pathlib
 
 class SNFLKQuery():
     credit_values = {
@@ -8,14 +10,47 @@ class SNFLKQuery():
     "enterprise": 3,
     "business critical": 4
     }
-    # set first value below for int
+    ##TODO: Set this as a class level property and capitalize
     data_type_map = ['float','float','string','datetime','datetime','string','datetime',
     'datetime','datetime','string','list','bytes','datetime','bool']
-    def __init__(self, connection, dbname, credit_value="standard"):
+    
+    def __init__(self, connection, dbname, cache, credit_value="standard"):
         self.connection = connection
         self.dbname = dbname
-        self.credit_value = credit_value
+        self.credit_value = credit_value  
+        self.cache = cache
+       
+    def simple_cache(func):
+        """Wraps each of the Snowflake query and returns results from cache if files exists locally.
+        Else it runs the query and saves the results to a local file.
+
+        Args:
+            func (_type_): query function
+
+        Returns:
+            Dataframe: Pandas dataframe that contains the results of the query
+        """
+        @functools.wraps(func)
+        def wrapper(self, *args, **kwargs):
+            cache_file = f'{self.cache}/{func.__name__}.pq'
+            if os.path.exists(cache_file):
+                print('Loading data from cache...')
+                df = pd.read_parquet(pathlib.Path(cache_file))
+            else:
+                print('Loading data from Snowflake...')
+                df =  func(self, *args, **kwargs)
+            
+            df.to_parquet(cache_file)    
+            return df
+        
+        return wrapper
     
+    # @simple_cache
+    # def test_func(self, msg):
+    #     print(msg)
+    #     return pd.DataFrame.from_dict(({'A': [1,3], 'B':[2,4]}))
+    
+    ##TODO: Write this as a class level function instead of an instance level function
     def query_to_df(self, sql):
         cursor_obj = self.connection.cursor()
         data_one = cursor_obj.execute(sql).fetch_pandas_all()
@@ -26,9 +61,12 @@ class SNFLKQuery():
             else:
                 dt_type[dd[0]] = SNFLKQuery.data_type_map[dd[1]]
                 data_one = data_one.astype({dd[0]: SNFLKQuery.data_type_map[dd[1]]})
+                
+        data_one.columns = data_one.columns.str.lower()
         return data_one
 
-        
+    ##TODO: Add a decorator to read from a materialized view if available
+    @simple_cache
     def total_cost_breakdown(self, start_date='2022-01-01', end_date=''):
         """
         Calculates the total credits consumed in a selected time period grouped by
@@ -64,35 +102,35 @@ class SNFLKQuery():
         searchopt_df = self.cost_of_searchoptimization(start_date, end_date)
         snowpipe_df = self.cost_of_snowpipe(start_date, end_date)
         autocluster_df = self.cost_of_autoclustering(start_date, end_date)
-
-        storage_sum = float(storage_df["DOLLARS"].sum())
+        storage_sum = storage_df["dollars"].sum()
         storage_credits = 0
         usage_list.append(["Storage", storage_credits, storage_sum])
-        compute_sum = float(compute_df["DOLLARS"].sum())
-        compute_credits = float(compute_df["CREDITS"].sum())
+        compute_sum = compute_df["dollars"].sum()
+        compute_credits = compute_df["credits"].sum()
         usage_list.append(["Compute", compute_credits, compute_sum])
-        cloud_service_sum = float(cloud_service_df["DOLLARS"].sum())
-        cloud_services_credits = float(cloud_service_df["CREDITS"].sum())
+        cloud_service_sum = cloud_service_df["dollars"].sum()
+        cloud_services_credits = cloud_service_df["credits"].sum()
         usage_list.append(["Cloud Service", cloud_services_credits, cloud_service_sum])
-        autocluster_sum = float(autocluster_df["DOLLARS"].sum())
-        autocluster_credits = float(autocluster_df["CREDITS"].sum())
+        autocluster_sum = autocluster_df["dollars"].sum()
+        autocluster_credits = autocluster_df["credits"].sum()
         usage_list.append(["Autoclustering", autocluster_credits, autocluster_sum])
-        material_sum = float(material_df["DOLLARS"].sum())
-        material_credits = float(material_df["CREDITS"].sum())
+        material_sum = material_df["dollars"].sum()
+        material_credits = material_df["credits"].sum()
         usage_list.append(["Materialization Views", material_credits, material_sum])
-        replication_sum = float(replication_df["DOLLARS"].sum())
-        replication_credits = float(replication_df["CREDITS"].sum())
+        replication_sum = replication_df["dollars"].sum()
+        replication_credits = replication_df["dollars"].sum()
         usage_list.append(["Replication", replication_credits, replication_sum])
-        searchopt_sum = float(searchopt_df["DOLLARS"].sum())
-        searchopt_credits = float(searchopt_df["CREDITS"].sum())
+        searchopt_sum = searchopt_df["dollars"].sum()
+        searchopt_credits = searchopt_df["credits"].sum()
         usage_list.append(["Search Optimization", searchopt_credits, searchopt_sum])
-        snowpipe_sum = float(snowpipe_df["DOLLARS"].sum())
-        snowpipe_credits = float(snowpipe_df["CREDITS"].sum())
+        snowpipe_sum = snowpipe_df["dollars"].sum()
+        snowpipe_credits = snowpipe_df["credits"].sum()
         usage_list.append(["Snowpipe", snowpipe_credits, snowpipe_sum])
         sqldf = pd.DataFrame(data = usage_list, columns=["cost_category", "credits", "dollars"])
         return sqldf
 
 
+    @simple_cache
     def total_cost_breakdown_ts(self, start_date='2022-01-01', end_date=''):
         """
         Calculates the total credits consumed in a selected time period grouped by
@@ -227,6 +265,7 @@ class SNFLKQuery():
     #     """
     #     return self.query_to_df(sql)
 
+    @simple_cache
     def cost_by_wh_ts(self, start_date='2022-01-01', end_date=''):
         """Calculates the total cost of compute and cloud services in a time
         series according to warehouse for a given time period using Warehouse
@@ -258,6 +297,7 @@ class SNFLKQuery():
         """
         return self.query_to_df(sql)
 
+    @simple_cache
     def cost_by_wh(self, start_date='2022-01-01', end_date=''):
         """Calculates the total cost of compute and cloud services according to
         warehouse for a given time period using Warehouse Metering History table.
@@ -284,6 +324,7 @@ class SNFLKQuery():
         """
         return self.query_to_df(sql)
 
+    @simple_cache
     def cost_of_autoclustering_ts(self, start_date='2022-01-01', end_date=''):
         """Calculates the cost of autoclustering in time series for a given time period using Automatic
         Clustering History table. Outputs a dataframe with the following columns:
@@ -317,6 +358,7 @@ class SNFLKQuery():
         """
         return self.query_to_df(sql)
 
+    @simple_cache
     def cost_of_autoclustering(self, start_date='2022-01-01', end_date=''):
         """Calculates the overall cost of autoclustering for a given time period using Automatic
         Clustering History table. Outputs a dataframe with the following columns:
@@ -348,6 +390,7 @@ class SNFLKQuery():
         """
         return self.query_to_df(sql)
 
+    @simple_cache
     def cost_of_cloud_services_ts(self, start_date='2022-01-01', end_date=''):
         """Calculates the cost of cloud services in time series for a given time period using Snowflake Warehouse
         Metering History tables. Outputs a dataframe with the following columns:
@@ -376,6 +419,7 @@ class SNFLKQuery():
 
         return self.query_to_df(sql)
 
+    @simple_cache
     def cost_of_cloud_services(self, start_date='2022-01-01', end_date=''):
         """Calculates the overall cost of cloud services for a given time period using Snowflake Warehouse
         Metering History tables. Outputs a dataframe with the following columns:
@@ -401,6 +445,7 @@ class SNFLKQuery():
 
         return self.query_to_df(sql)
 
+    @simple_cache
     def cost_of_compute_ts(self, start_date='2022-01-01', end_date=''):
         """Calculates the cost of compute in time series for a given time period using Snowflake Warehouse
         Metering History tables. Outputs a dataframe with the following columns:
@@ -429,6 +474,7 @@ class SNFLKQuery():
         """
         return self.query_to_df(sql)
 
+    @simple_cache
     def cost_of_compute(self, start_date='2022-01-01', end_date=''):
         """Calculates the overall cost of compute for a given time period using Snowflake Warehouse
         Metering History tables. Outputs a dataframe with the following columns:
@@ -453,6 +499,7 @@ class SNFLKQuery():
         """
         return self.query_to_df(sql)
 
+    @simple_cache
     def cost_of_materialized_views_ts(self, start_date='2022-01-01', end_date=''):
         """Calculates the overall cost of materialized views in time series for a given time
         period using Materialized View Refresh History table.
@@ -487,6 +534,7 @@ class SNFLKQuery():
         """
         return self.query_to_df(sql)
 
+    @simple_cache
     def cost_of_materialized_views(self, start_date='2022-01-01', end_date=''):
         """Calculates the overall cost of materialized views for a given time
         period using Materialized View Refresh History table.
@@ -518,6 +566,7 @@ class SNFLKQuery():
         """
         return self.query_to_df(sql)
 
+    @simple_cache
     def cost_of_replication_ts(self, start_date='2022-01-01', end_date=''):
         """Calculates the cost of replication in time series used in a given time
         period using Replication Usage History table.
@@ -547,6 +596,7 @@ class SNFLKQuery():
 
         return self.query_to_df(sql)
 
+    @simple_cache
     def cost_of_replication(self, start_date='2022-01-01', end_date=''):
         """Calculates the overall cost of replication used in a given time
         period using Replication Usage History table.
@@ -575,6 +625,7 @@ class SNFLKQuery():
 
         return self.query_to_df(sql)
 
+    @simple_cache
     def cost_of_searchoptimization_ts(self, start_date='2022-01-01', end_date=''):
         """Calculates the cost of search optimizations in time series used in a
         given time period using Search Optimization History table.
@@ -606,6 +657,7 @@ class SNFLKQuery():
 
         return self.query_to_df(sql)
 
+    @simple_cache
     def cost_of_searchoptimization(self, start_date='2022-01-01', end_date=''):
         """Calculates the overall cost of search optimizations used in a
         given time period using Search Optimization History table.
@@ -636,6 +688,7 @@ class SNFLKQuery():
         """
         return self.query_to_df(sql)
 
+    @simple_cache
     def cost_of_snowpipe_ts(self, start_date='2022-01-01', end_date=''):
         """Calculates the cost of snowpipe usage in time series in a
         given time period using Pipe Usage History table.
@@ -666,6 +719,7 @@ class SNFLKQuery():
         """
         return self.query_to_df(sql)
 
+    @simple_cache
     def cost_of_snowpipe(self, start_date='2022-01-01', end_date=''):
         """Calculates the overall cost of snowpipe usage in a
         given time period using Pipe Usage History table.
@@ -695,6 +749,7 @@ class SNFLKQuery():
         """
         return self.query_to_df(sql)
 
+    @simple_cache
     def cost_of_storage_ts(self, start_date='2022-01-01', end_date=''):
         """
         Calculates the overall cost of storage usage in time series in a
