@@ -45,11 +45,6 @@ class SNFLKQuery():
         
         return wrapper
     
-    # @simple_cache
-    # def test_func(self, msg):
-    #     print(msg)
-    #     return pd.DataFrame.from_dict(({'A': [1,3], 'B':[2,4]}))
-    
     ##TODO: Write this as a class level function instead of an instance level function
     def query_to_df(self, sql):
         cursor_obj = self.connection.cursor()
