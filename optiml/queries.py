@@ -45,11 +45,6 @@ class SNFLKQuery():
         
         return wrapper
     
-    # @simple_cache
-    # def test_func(self, msg):
-    #     print(msg)
-    #     return pd.DataFrame.from_dict(({'A': [1,3], 'B':[2,4]}))
-    
     ##TODO: Write this as a class level function instead of an instance level function
     def query_to_df(self, sql):
         cursor_obj = self.connection.cursor()
@@ -168,6 +163,11 @@ class SNFLKQuery():
         autocluster_df = self.cost_of_autoclustering_ts(start_date, end_date)
         ts_df = storage_df.append(compute_df)
         return ts_df
+    
+    #TODO:
+    # @simple_cache
+    def cost_by_user(self, start_date, end_date):
+        pass
 
     @simple_cache
     def cost_by_user_ts(self, start_date='2022-01-01', end_date=''):
@@ -751,6 +751,7 @@ class SNFLKQuery():
 
     @simple_cache
     def cost_of_storage_ts(self, start_date='2022-01-01', end_date=''):
+        ##TODO: Distribute daily storage costs hourly over the day so that ts is consistent with other ts
         """
         Calculates the overall cost of storage usage in time series in a
         given time period using Storage Usage Su table.
