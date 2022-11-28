@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date,datetime,time
 import functools
 import os
 import pandas as pd
@@ -776,4 +776,29 @@ class SNFLKQuery():
         ON DA.DATE_MONTH = TO_DATE(DATE_PART('year',USAGE_DATE)||'-'||DATE_PART('month',USAGE_DATE)||'-01')) as cost
         where cost.usage_date between '{start_date}' and '{end_date}' group by 1, 2, 3 order by 2 asc;
         """
-        return self.query_to_df(sql)
+        query_df = self.query_to_df(sql)
+        new_storage = []
+        for index, row in query_df.iterrows():
+            row['dollar'] = []
+            row['dollar'] = row['dollars'] / 24
+            lst1 = []
+            lst2 = []
+            lst3 = []
+            for i in range(0, 24):
+                row['start_time'] = datetime.combine(pd.to_datetime(row['start_time']), time(hour=i, minute=00))
+                start_time = row['start_time'].strftime("%m/%d/%Y, %H:%M:%S")
+                lst1.append(start_time)
+                row['start_time'] = row['start_time'] + pd.DateOffset(hours=1)
+                row['end_time'] = []
+                new_storage.append(row['start_time'])
+                new_storage.append(row['end_time'])
+                new_storage.append(row['dollar'])
+                end_time = row['start_time'].strftime("%m/%d/%Y, %H:%M:%S")
+                lst2.append(end_time)
+                lst3.append(row['dollar'])
+            df = pd.DataFrame()
+            df['start_time'] = lst1
+            df['end_time'] = lst2
+            df['dollar'] = lst3
+            query_df.update(df)
+        return df
