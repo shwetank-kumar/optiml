@@ -89,7 +89,7 @@ class SNFLKQuery():
         if self.credit_value:
             credit_val = SNFLKQuery.credit_values[self.credit_value]
         usage_list = []
-        storage_df = self.cost_of_storage_ts(start_date, end_date)
+        storage_df = self.cost_of_storage(start_date, end_date)
         compute_df = self.cost_of_compute(start_date, end_date)
         cloud_service_df = self.cost_of_cloud_services(start_date, end_date)
         material_df = self.cost_of_materialized_views(start_date, end_date)
@@ -746,6 +746,35 @@ class SNFLKQuery():
           where start_time between '{start_date}' and '{end_date}'
           group by 1
           order by 1 desc;
+        """
+        return self.query_to_df(sql)
+
+    @simple_cache
+    def cost_of_storage(self, start_date='2022-01-01', end_date=''):
+        ##TODO: Distribute daily storage costs hourly over the day so that ts is consistent with other ts
+        """
+        Calculates the overall cost of storage usage 
+        given time period using Storage Usage Su table.
+        Outputs a dataframe with the following columns:
+        Category name: Category name as Storage
+        Usage date: The date on which storage is used
+        Dollars used: Total cost of storage (in dollars) used
+        """
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql = f"""
+         select cost.category_name, cost.USAGE_DATE as start_time, cost.DOLLARS_USED as dollars from (
+        SELECT
+                'Storage' AS category_name
+                ,SU.USAGE_DATE
+                ,((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23)/DA.DAYS_IN_MONTH as DOLLARS_USED
+        from    {self.dbname}.ACCOUNT_USAGE.STORAGE_USAGE SU
+        JOIN    (SELECT COUNT(*) AS DAYS_IN_MONTH,TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01') as DATE_MONTH
+        FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM
+        GROUP BY TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01')) DA
+        ON DA.DATE_MONTH = TO_DATE(DATE_PART('year',USAGE_DATE)||'-'||DATE_PART('month',USAGE_DATE)||'-01')) as cost
+        where cost.usage_date between '{start_date}' and '{end_date}' group by 1, 2, 3 order by 2 asc;
         """
         return self.query_to_df(sql)
 
