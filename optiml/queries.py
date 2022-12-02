@@ -60,12 +60,6 @@ class SNFLKQuery():
         data_one.columns = data_one.columns.str.lower()
         return data_one
 
-    def ts_remove_localization(self, df):
-        df["start_time"] = [d.tz_localize(None) for d in df["start_time"]]
-        df["end_time"] = [d.tz_localize(None) for d in df["end_time"]]
-        return df
-        
-
     ##TODO: Add a decorator to read from a materialized view if available
     # @simple_cache
     def total_cost_breakdown(self, start_date='2022-01-01', end_date=''):
@@ -269,10 +263,7 @@ class SNFLKQuery():
             ) as COST {ini_date} group by 5, 1, 2, 6 order by 5 asc
             ;
         """
-        ## Removing localization on the timestamp so it can bite us in the ass
-        ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
-        return df
+        return self.query_to_df(sql)
 
     # @simple_cache
     ##TODO: This can be consolidated with cost_by_wh except this one right now
@@ -306,12 +297,7 @@ class SNFLKQuery():
                 group by 1,2,4,5
                 order by 4 asc;
         """
-        ## Removing localization on the timestamp so it can bite us in the ass
-        ## later
-        df = self.query_to_df(sql)
-        df["start_time"] = [d.tz_localize(None) for d in df["start_time"]]
-        df["end_time"] = [d.tz_localize(None) for d in df["end_time"]]
-        return df
+        return self.query_to_df(sql)
 
     # @simple_cache
     def cost_by_wh(self, start_date='2022-01-01', end_date=''):
@@ -361,6 +347,7 @@ class SNFLKQuery():
             credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
         select database_name
+              
               ,schema_name
               ,table_name
               ,sum(credits_used) as credits
@@ -372,10 +359,7 @@ class SNFLKQuery():
         group by 1,2,3,6,7
         order by 6 desc;
         """
-        ## Removing localization on the timestamp so it can bite us in the ass
-        ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
-        return df
+        return self.query_to_df(sql)
 
     # @simple_cache
     def cost_of_cloud_services_ts(self, start_date='2022-01-01', end_date=''):
@@ -396,7 +380,8 @@ class SNFLKQuery():
             credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
         SELECT DISTINCT
-                WMH.WAREHOUSE_NAME
+                'Snowflake' as user_name
+                ,WMH.WAREHOUSE_NAME
                 ,WMH.CREDITS_USED_CLOUD_SERVICES as credits
                 ,({credit_val}*credits) as dollars
                 ,WMH.START_TIME
@@ -404,13 +389,9 @@ class SNFLKQuery():
         from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH where WMH.START_TIME between '{start_date}' and '{end_date}' order by 4 asc;
         """
 
-        ## Removing localization on the timestamp so it can bite us in the ass
-        ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
-        return df
+        return self.query_to_df(sql)
 
     # @simple_cache
-    ##TODO: Make this return user name
     def cost_of_compute_ts(self, start_date='2022-01-01', end_date=''):
         """Calculates the cost of compute in time series for a given time period using Snowflake Warehouse
         Metering History tables. Outputs a dataframe with the following columns:
@@ -429,17 +410,20 @@ class SNFLKQuery():
             credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
         SELECT DISTINCT
-                WMH.WAREHOUSE_NAME
+                 WEH.USER_NAME,
+                 WMH.WAREHOUSE_NAME
                 ,WMH.CREDITS_USED_COMPUTE as credits
                 ,({credit_val}*credits) as dollars
                 ,WMH.START_TIME
                 ,WMH.END_TIME
-        from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH
+        from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH inner join {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_EVENTS_HISTORY WEH on WMH.WAREHOUSE_ID = WEH.WAREHOUSE_ID
         where WMH.START_TIME between '{start_date}' and '{end_date}' order by 4 asc;
         """
         ## Removing localization on the timestamp so it can bite us in the ass
         ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
+        df = self.query_to_df(sql)
+        df["start_time"] = [d.tz_localize(None) for d in df["start_time"]]
+        df["end_time"] = [d.tz_localize(None) for d in df["end_time"]]
         return df
 
     # @simple_cache
@@ -468,6 +452,7 @@ class SNFLKQuery():
             ,schema_name
             ,table_name
             ,credits_used as credits
+            ,'Snowflake' as user_name
             ,({credit_val}*credits) as dollars
             ,start_time
             ,end_time
@@ -477,7 +462,9 @@ class SNFLKQuery():
         """
         ## Removing localization on the timestamp so it can bite us in the ass
         ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
+        df = self.query_to_df(sql)
+        df["start_time"] = [d.tz_localize(None) for d in df["start_time"]]
+        df["end_time"] = [d.tz_localize(None) for d in df["end_time"]]
         return df
 
     # @simple_cache
@@ -496,21 +483,28 @@ class SNFLKQuery():
         credit_val = ''
         if self.credit_value:
             credit_val = SNFLKQuery.credit_values[self.credit_value]
-        sql = f"""
+    
+        sql=f"""
         select
-            database_name
+            'Snowflake' as user_name,
+             database_name
             ,credits_used as credits
             ,({credit_val}*credits) as dollars
             ,start_time
             ,end_time
         from {self.dbname}.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY
+        
+            
+
         where start_time between '{start_date}' and '{end_date}'
         order by 4 desc;
         """
 
         ## Removing localization on the timestamp so it can bite us in the ass
         ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
+        df = self.query_to_df(sql)
+        df["start_time"] = [d.tz_localize(None) for d in df["start_time"]]
+        df["end_time"] = [d.tz_localize(None) for d in df["end_time"]]
         return df
 
     # @simple_cache
@@ -532,20 +526,23 @@ class SNFLKQuery():
             credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
         select
-            database_name
+             database_name
             ,schema_name
             ,table_name
             ,credits_used as credits
             ,({credit_val}*credits) as dollars
             ,start_time
             ,end_time
+            ,'Snowflake' as user_name
         from {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY
         where start_time between '{start_date}' and '{end_date}'
         order by 6 desc;"""
 
         ## Removing localization on the timestamp so it can bite us in the ass
         ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
+        df = self.query_to_df(sql)
+        df["start_time"] = [d.tz_localize(None) for d in df["start_time"]]
+        df["end_time"] = [d.tz_localize(None) for d in df["end_time"]]
         return df
 
     # @simple_cache
@@ -568,7 +565,8 @@ class SNFLKQuery():
             credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
           select
-            pipe_name
+            'Snowflake' as user_name
+            ,pipe_name
             ,credits_used as credits
             ,start_time
             ,end_time
@@ -579,7 +577,9 @@ class SNFLKQuery():
         """
         ## Removing localization on the timestamp so it can bite us in the ass
         ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
+        df = self.query_to_df(sql)
+        df["start_time"] = [d.tz_localize(None) for d in df["start_time"]]
+        df["end_time"] = [d.tz_localize(None) for d in df["end_time"]]
         return df
 
     # @simple_cache
@@ -597,12 +597,14 @@ class SNFLKQuery():
             today_date = date.today()
             end_date = str(today_date)
         sql = f"""
-        select cost.category_name, cost.USAGE_DATE as start_time, cost.DOLLARS_USED as dollars from (
+        select cost.category_name, cost.USAGE_DATE as start_time, cost.DOLLARS_USED as dollars, 'Snowflake' as user_name from (
         SELECT
-                'Storage' AS category_name
+                
+                'Storage' as category_name
                 ,SU.USAGE_DATE
+                
                 ,((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23)/DA.DAYS_IN_MONTH as DOLLARS_USED
-        from    {self.dbname}.ACCOUNT_USAGE.STORAGE_USAGE SU
+        from    {self.dbname}.ACCOUNT_USAGE.STORAGE_USAGE SU 
         JOIN    (SELECT COUNT(*) AS DAYS_IN_MONTH,TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01') as DATE_MONTH
         FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM
         GROUP BY TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01')) DA
@@ -617,69 +619,4 @@ class SNFLKQuery():
         df.insert(1, "end_time", df["start_time"] + pd.offsets.Hour(1))
         return df
 
-    def cost_by_partner_tool_ts(self, start_date='2022-01-01', end_date=''):
-        ##TODO: Convert partner tool consumption query into 
-        # a timeseries so that its consistent with others and can be plotted out
-        """
-        Calculates the overall cost of usage by partner application over a
-        Outputs a dataframe with the following columns:
-        Category name: Category name as Storage
-        Usage date: The date on which storage is used
-        Dollars used: Total cost of storage (in dollars) used
-        """
-        if not end_date:
-            today_date = date.today()
-            end_date = str(today_date)
-        sql = f"""-- THIS IS APPROXIMATE CREDIT CONSUMPTION BY CLIENT APPLICATION
-            with client_hour_execution_cte as (
-                select  case
-                    when client_application_id like 'Go %' then 'Go'
-                    when client_application_id like 'Snowflake UI %' then 'Snowflake UI'
-                    when client_application_id like 'SnowSQL %' then 'SnowSQL'
-                    when client_application_id like 'JDBC %' then 'JDBC'
-                    when client_application_id like 'PythonConnector %' then 'Python'
-                    when client_application_id like 'ODBC %' then 'ODBC'
-                    else 'NOT YET MAPPED: ' || client_application_id
-                    end as client_application_name
-                ,warehouse_name
-                ,date_trunc('hour',start_time) as start_time_hour
-                ,sum(execution_time)  as client_hour_execution_time
-                from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY qh
-                join {self.dbname}.ACCOUNT_USAGE.SESSIONS se on se.session_id = qh.session_id
-                where warehouse_name is not null
-                    and execution_time > 0
-
-            -- Change the below filter if you want to look at a longer range than the last 1 month
-                    and start_time between '{start_date}' and '{end_date}'
-                group by 1,2,3
-                )
-            , hour_execution_cte as (
-                select start_time_hour
-                    ,warehouse_name
-                    ,sum(client_hour_execution_time) as hour_execution_time
-                from client_hour_execution_cte
-                group by 1,2
-            )
-            , approximate_credits as (
-                select
-                    a.client_application_name
-                    ,c.warehouse_name
-                    ,(a.client_hour_execution_time/b.hour_execution_time)*c.credits_used as approximate_credits_used
-
-                from client_hour_execution_cte a
-                join hour_execution_cte b  on a.start_time_hour = b.start_time_hour and b.warehouse_name = a.warehouse_name
-                join {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY c on c.warehouse_name = a.warehouse_name and c.start_time = a.start_time_hour
-            )
-
-            select
-                client_application_name
-                ,warehouse_name
-                ,sum(approximate_credits_used) as approximate_credits_used
-            from approximate_credits
-            group by 1,2
-            order by 3 desc
-            ;"""
-
-        
-        df = self.query_to_df(sql)
-        return df
+    
