@@ -619,7 +619,7 @@ class SNFLKQuery():
 
     def cost_by_partner_tool_ts(self, start_date='2022-01-01', end_date=''):
         ##TODO: Convert partner tool consumption query into 
-        # a timeseries so that its consistent with others and can be plotted out
+        # a hourly timeseries so that its consistent with others and can be plotted out
         """
         Calculates the overall cost of usage by partner application over a
         Outputs a dataframe with the following columns:
