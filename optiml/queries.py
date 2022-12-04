@@ -180,6 +180,7 @@ class SNFLKQuery():
         ini_date = ""
         if start_date and end_date:
             ini_date = "where cost.start_time>='{}' and cost.end_time<='{}'".format(start_date, end_date)
+
         sql = f"""
             --COST.WAREHOUSE_GROUP_NAME, COST.USER_NAME, COST.WAREHOUSE_NAME, COST.START_TIME, COST.END_TIME, SUM(COST.CREDITS_USED), SUM(CREDIT_PRICE), SUM(DOLLARS_USED)
             SELECT DISTINCT cost.USER_NAME, cost.WAREHOUSE_GROUP_NAME, SUM(cost.CREDITS_USED) as credits_used,
@@ -630,7 +631,56 @@ class SNFLKQuery():
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
-        sql = f"""-- THIS IS APPROXIMATE CREDIT CONSUMPTION BY CLIENT APPLICATION
+        # sql = f"""-- THIS IS APPROXIMATE CREDIT CONSUMPTION BY CLIENT APPLICATION
+        #     with client_hour_execution_cte as (
+        #         select  case
+        #             when client_application_id like 'Go %' then 'Go'
+        #             when client_application_id like 'Snowflake UI %' then 'Snowflake UI'
+        #             when client_application_id like 'SnowSQL %' then 'SnowSQL'
+        #             when client_application_id like 'JDBC %' then 'JDBC'
+        #             when client_application_id like 'PythonConnector %' then 'Python'
+        #             when client_application_id like 'ODBC %' then 'ODBC'
+        #             else 'NOT YET MAPPED: ' || client_application_id
+        #             end as client_application_name
+        #         ,warehouse_name
+        #         ,date_trunc('hour',start_time) as start_time_hour
+        #         ,sum(execution_time)  as client_hour_execution_time
+        #         from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY qh
+        #         join {self.dbname}.ACCOUNT_USAGE.SESSIONS se on se.session_id = qh.session_id
+        #         where warehouse_name is not null
+        #             and execution_time > 0
+
+        #     -- Change the below filter if you want to look at a longer range than the last 1 month
+        #             and start_time between '{start_date}' and '{end_date}'
+        #         group by 1,2,3
+        #         )
+        #     , hour_execution_cte as (
+        #         select start_time_hour
+        #             ,warehouse_name
+        #             ,sum(client_hour_execution_time) as hour_execution_time
+        #         from client_hour_execution_cte
+        #         group by 1,2
+        #     )
+        #     , approximate_credits as (
+        #         select
+        #             a.client_application_name
+        #             ,c.warehouse_name
+        #             ,(a.client_hour_execution_time/b.hour_execution_time)*c.credits_used as approximate_credits_used
+
+        #         from client_hour_execution_cte a
+        #         join hour_execution_cte b  on a.start_time_hour = b.start_time_hour and b.warehouse_name = a.warehouse_name
+        #         join {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY c on c.warehouse_name = a.warehouse_name and c.start_time = a.start_time_hour
+        #     )
+
+        #     select
+        #         client_application_name
+        #         ,warehouse_name
+        #         ,sum(approximate_credits_used) as approximate_credits_used
+        #     from approximate_credits
+        #     group by 1,2
+        #     order by 3 desc
+        #     ;"""
+        sql = f"""-- THIS IS A TIMESERIES OF APPROXIMATE CREDIT CONSUMPTION BY CLIENT APPLICATION
             with client_hour_execution_cte as (
                 select  case
                     when client_application_id like 'Go %' then 'Go'
@@ -662,7 +712,8 @@ class SNFLKQuery():
             )
             , approximate_credits as (
                 select
-                    a.client_application_name
+                    date_trunc('day', a.start_time_hour) as truncated_date
+                    ,a.client_application_name
                     ,c.warehouse_name
                     ,(a.client_hour_execution_time/b.hour_execution_time)*c.credits_used as approximate_credits_used
 
@@ -672,14 +723,22 @@ class SNFLKQuery():
             )
 
             select
-                client_application_name
-                ,warehouse_name
+                truncated_date
+                ,client_application_name
                 ,sum(approximate_credits_used) as approximate_credits_used
             from approximate_credits
             group by 1,2
-            order by 3 desc
-            ;"""
+            order by 1 asc, 3 desc
+            ;
 
+        """
         
+        df = self.query_to_df(sql)
+        return df
+
+## Config related queries
+    def warehouse_config(self):
+        """Gives the details of the wareouse config"""
+        sql = f"""select * from {self.dbname}.account_usage.warehouses"""
         df = self.query_to_df(sql)
         return df
