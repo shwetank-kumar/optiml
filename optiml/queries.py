@@ -744,7 +744,9 @@ class SNFLKQuery():
         return df
 
 
-    def expensive_queries_ts(self, start_date='2022-01-01', end_date=''):
+## Query cost related queries
+##TODO: 1) Check query 2) Add flag to give unique query text with parameters 
+    def n_expensive_queries(self, start_date='2022-01-01', end_date='', n=10):
         """
         Calculates expense of queries over a specific time period
         """
@@ -816,7 +818,9 @@ class SNFLKQuery():
             WHERE TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
             GROUP BY WAREHOUSE_NAME
           ) WC
-        ORDER BY EXECUTION_TIME_MINUTES DESC
+        ORDER BY CREDITS DESC LIMIT {n}
         """
         df = self.query_to_df(sql)
         return df
+
+
