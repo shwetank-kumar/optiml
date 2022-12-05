@@ -13,13 +13,13 @@ class SNFLKQuery():
     ##TODO: Set this as a class level property and capitalize
     data_type_map = ['float','float','string','datetime','datetime','string','datetime',
     'datetime','datetime','string','list','bytes','datetime','bool']
-    
+
     def __init__(self, connection, dbname, cache, credit_value="standard"):
         self.connection = connection
         self.dbname = dbname
-        self.credit_value = credit_value  
+        self.credit_value = credit_value
         self.cache = cache
-       
+
     def simple_cache(func):
         """Wraps each of the Snowflake query and returns results from cache if files exists locally.
         Else it runs the query and saves the results to a local file.
@@ -39,12 +39,12 @@ class SNFLKQuery():
             else:
                 print('Loading data from Snowflake...')
                 df =  func(self, *args, **kwargs)
-            
-            df.to_parquet(cache_file)    
+
+            df.to_parquet(cache_file)
             return df
-        
+
         return wrapper
-    
+
     ##TODO: Write this as a class level function instead of an instance level function
     def query_to_df(self, sql):
         cursor_obj = self.connection.cursor()
@@ -56,7 +56,7 @@ class SNFLKQuery():
             else:
                 dt_type[dd[0]] = SNFLKQuery.data_type_map[dd[1]]
                 data_one = data_one.astype({dd[0]: SNFLKQuery.data_type_map[dd[1]]})
-                
+
         data_one.columns = data_one.columns.str.lower()
         return data_one
 
@@ -64,7 +64,7 @@ class SNFLKQuery():
         df["start_time"] = [d.tz_localize(None) for d in df["start_time"]]
         df["end_time"] = [d.tz_localize(None) for d in df["end_time"]]
         return df
-        
+
 
     ##TODO: Add a decorator to read from a materialized view if available
     # @simple_cache
@@ -169,7 +169,7 @@ class SNFLKQuery():
         autocluster_df = self.cost_of_autoclustering_ts(start_date, end_date)
         tsdf = storage_df.append(compute_df)
         return tsdf
-    
+
     #TODO:
     # @simple_cache
     def cost_by_user(self, start_date, end_date):
@@ -587,7 +587,7 @@ class SNFLKQuery():
     def cost_of_storage_ts(self, start_date='2022-01-01', end_date=''):
         ##TODO: Distribute daily storage costs hourly over the day so that ts is consistent with other ts
         """
-        Calculates the overall cost of storage usage 
+        Calculates the overall cost of storage usage
         given time period using Storage Usage Su table.
         Outputs a dataframe with the fhollowing columns:
         Category name: Category name as Storage
@@ -619,7 +619,7 @@ class SNFLKQuery():
         return df
 
     def cost_by_partner_tool_ts(self, start_date='2022-01-01', end_date=''):
-        ##TODO: Convert partner tool consumption query into 
+        ##TODO: Convert partner tool consumption query into
         # a hourly timeseries so that its consistent with others and can be plotted out
         """
         Calculates the overall cost of usage by partner application over a
@@ -732,7 +732,7 @@ class SNFLKQuery():
             ;
 
         """
-        
+
         df = self.query_to_df(sql)
         return df
 
@@ -740,5 +740,83 @@ class SNFLKQuery():
     def warehouse_config(self):
         """Gives the details of the wareouse config"""
         sql = f"""select * from {self.dbname}.account_usage.warehouses"""
+        df = self.query_to_df(sql)
+        return df
+
+
+    def expensive_queries_ts(self, start_date='2022-01-01', end_date=''):
+        """
+        Calculates expense of queries over a specific time period
+        """
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
+        sql = f"""
+        WITH WAREHOUSE_SIZE AS
+        (
+             SELECT WAREHOUSE_SIZE, NODES
+               FROM (
+                      SELECT 'XSMALL' AS WAREHOUSE_SIZE, 1 AS NODES
+                      UNION ALL
+                      SELECT 'SMALL' AS WAREHOUSE_SIZE, 2 AS NODES
+                      UNION ALL
+                      SELECT 'MEDIUM' AS WAREHOUSE_SIZE, 4 AS NODES
+                      UNION ALL
+                      SELECT 'LARGE' AS WAREHOUSE_SIZE, 8 AS NODES
+                      UNION ALL
+                      SELECT 'XLARGE' AS WAREHOUSE_SIZE, 16 AS NODES
+                      UNION ALL
+                      SELECT '2XLARGE' AS WAREHOUSE_SIZE, 32 AS NODES
+                      UNION ALL
+                      SELECT '3XLARGE' AS WAREHOUSE_SIZE, 64 AS NODES
+                      UNION ALL
+                      SELECT '4XLARGE' AS WAREHOUSE_SIZE, 128 AS NODES
+                    )
+        ),
+        QUERY_HISTORY AS
+        (
+             SELECT QH.QUERY_ID
+                   ,QH.QUERY_TEXT
+                   ,QH.USER_NAME
+                   ,QH.ROLE_NAME
+                   ,QH.EXECUTION_TIME
+                   ,QH.WAREHOUSE_SIZE
+              FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
+             WHERE START_TIME between '{start_date}' and '{end_date}'
+        )
+
+        SELECT QH.QUERY_ID
+              ,QH.QUERY_TEXT
+              ,QH.USER_NAME
+              ,QH.ROLE_NAME
+              ,(QH.EXECUTION_TIME/(1000*60)) AS EXECUTION_TIME_MINUTES
+              ,WS.WAREHOUSE_SIZE
+              ,WS.NODES
+              ,WC.CREDITS
+              ,(WC.DOLLARS/QC.QUERY_COUNT) as cost_per_query
+        FROM QUERY_HISTORY QH
+        JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
+        JOIN  (
+            SELECT
+               WAREHOUSE_NAME
+              ,COUNT(QUERY_ID) as QUERY_COUNT
+            FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY
+            WHERE TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
+            GROUP BY WAREHOUSE_NAME
+              ) QC
+        JOIN (
+            SELECT
+                WAREHOUSE_NAME
+                ,SUM(CREDITS_USED) as CREDITS
+                ,SUM(CREDITS_USED)*({credit_val}) as DOLLARS
+            FROM {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY
+            WHERE TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
+            GROUP BY WAREHOUSE_NAME
+          ) WC
+        ORDER BY EXECUTION_TIME_MINUTES DESC
+        """
         df = self.query_to_df(sql)
         return df
