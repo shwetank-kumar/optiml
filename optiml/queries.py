@@ -160,8 +160,8 @@ class SNFLKQuery():
         searchopt_df = self.cost_of_searchoptimization_ts(start_date, end_date)
         snowpipe_df = self.cost_of_snowpipe_ts(start_date, end_date)
         autocluster_df = self.cost_of_autoclustering_ts(start_date, end_date)
-        cost_by_user_ts_df=self.cost_by_user_ts(start_date,end_date)
-        df_concat=pd.concat([compute_df,storage_df,cloud_service_df,material_df,replication_df,searchopt_df,snowpipe_df,autocluster_df,cost_by_user_ts_df],0)
+        
+        df_concat=pd.concat([compute_df,storage_df,cloud_service_df,material_df,replication_df,searchopt_df,snowpipe_df,autocluster_df],0)
         df_select=df_concat[['user_name','credits','start_time','end_time','category_name']]
     
         return df_select
