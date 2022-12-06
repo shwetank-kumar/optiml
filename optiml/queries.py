@@ -816,7 +816,7 @@ class SNFLKQuery():
             WHERE TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
             GROUP BY WAREHOUSE_NAME
           ) WC
-        ORDER BY EXECUTION_TIME_MINUTES DESC limit {n}
+        ORDER BY CREDITS DESC limit {n}
         """
         df = self.query_to_df(sql)
         return df
