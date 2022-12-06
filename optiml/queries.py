@@ -788,15 +788,14 @@ class SNFLKQuery():
              WHERE START_TIME between '{start_date}' and '{end_date}'
         )
 
-        SELECT QH.QUERY_ID
-              ,QH.QUERY_TEXT
+        SELECT DISTINCT
+               QH.QUERY_TEXT
               ,QH.USER_NAME
               ,QH.ROLE_NAME
               ,(QH.EXECUTION_TIME/(1000*60)) AS EXECUTION_TIME_MINUTES
               ,WS.WAREHOUSE_SIZE
               ,WS.NODES
               ,WC.CREDITS
-              ,(WC.DOLLARS/QC.QUERY_COUNT) as cost_per_query
         FROM QUERY_HISTORY QH
         JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
         JOIN  (
@@ -811,12 +810,11 @@ class SNFLKQuery():
             SELECT
                 WAREHOUSE_NAME
                 ,SUM(CREDITS_USED) as CREDITS
-                ,SUM(CREDITS_USED)*({credit_val}) as DOLLARS
             FROM {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY
             WHERE TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
             GROUP BY WAREHOUSE_NAME
           ) WC
-        ORDER BY EXECUTION_TIME_MINUTES DESC
+        ORDER BY EXECUTION_TIME_MINUTES DESC limit {n}
         """
         df = self.query_to_df(sql)
         return df
