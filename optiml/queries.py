@@ -757,7 +757,6 @@ class SNFLKQuery():
         # if self.credit_value:
         #     credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
-<<<<<<< HEAD
         WITH WAREHOUSE_SIZE AS
         (
              SELECT WAREHOUSE_SIZE, NODES
@@ -818,18 +817,6 @@ class SNFLKQuery():
             GROUP BY WAREHOUSE_NAME
           ) WC
         ORDER BY EXECUTION_TIME_MINUTES DESC limit {n}
-=======
-        SELECT DISTINCT
-           QH.QUERY_TEXT
-           ,QH.USER_NAME
-           ,QH.ROLE_NAME
-           --,SUM(QH.EXECUTION_TIME) AS TOTAL_EXECUTION_TIME
-           ,QH.WAREHOUSE_TYPE
-           ,SUM(QH.CREDITS_USED_CLOUD_SERVICES) as CREDITS
-        FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
-        where QH.start_time between '{start_date}' and '{end_date}'
-        group by QUERY_TEXT, USER_NAME, ROLE_NAME, WAREHOUSE_TYPE order by CREDITS desc limit {n}
->>>>>>> 3f57aa417caf7c0955c081b0990f94bf61c95b64
         """
         df = self.query_to_df(sql)
         return df
