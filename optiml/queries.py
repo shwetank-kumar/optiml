@@ -267,6 +267,7 @@ class SNFLKQuery():
               ,({credit_val}*credits) as dollars
               ,start_time
               ,end_time
+              ,'Autoclustering' as categor_name
               
         from {self.dbname}.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY
         where start_time between '{start_date}' and '{end_date}'
@@ -300,6 +301,8 @@ class SNFLKQuery():
                 ,({credit_val}*credits) as dollars
                 ,WMH.START_TIME
                 ,WMH.END_TIME
+                ,'Cloud services' as category_name
+                
         from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH where WMH.START_TIME between '{start_date}' and '{end_date}' order by 4 asc;
         """
 
@@ -451,6 +454,7 @@ class SNFLKQuery():
             ,start_time
             ,end_time
             ,'Snowflake' as user_name
+            ,'Search optimization' as category_name
         from {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY
         where start_time between '{start_date}' and '{end_date}'
         order by 6 desc;"""
