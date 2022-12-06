@@ -267,7 +267,7 @@ class SNFLKQuery():
               ,({credit_val}*credits) as dollars
               ,start_time
               ,end_time
-              ,'Autoclustering' as categor_name
+              ,'Autoclustering' as category_name
               
         from {self.dbname}.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY
         where start_time between '{start_date}' and '{end_date}'
