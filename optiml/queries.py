@@ -817,5 +817,25 @@ class SNFLKQuery():
         
         df=self.query_to_df(sql)
         return df
+    def n_most_executed_queries(self, start_date='2022-01-01',end_date=''):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql=f"""
+        SELECT 
+        QUERY_TEXT
+        ,count(*) as number_of_queries
+        from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY 
+        where 1=1
+        and TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
+        and TOTAL_ELAPSED_TIME > 0 --only get queries that actually used compute
+        group by 1
+        having count(*) >= 10 --configurable/minimal threshold
+        order by 2 desc
+        limit 100 --configurable upper bound threshold
+        """
+
+        df=self.query_to_df(sql)
+        return df
 
     
