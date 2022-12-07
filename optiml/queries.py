@@ -521,7 +521,7 @@ class SNFLKQuery():
             today_date = date.today()
             end_date = str(today_date)
         sql = f"""
-        select cost.category_name, cost.USAGE_DATE as start_time, cost.DOLLARS_USED as dollars, 'Snowflake' as user_name, 0git statu as credits from (
+        select cost.category_name, cost.USAGE_DATE as start_time, cost.DOLLARS_USED as dollars, 'Snowflake' as user_name, 0 as credits from (
         SELECT
                 
                 'Storage' as category_name
