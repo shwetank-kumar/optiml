@@ -13,13 +13,13 @@ class SNFLKQuery():
     ##TODO: Set this as a class level property and capitalize
     data_type_map = ['float','float','string','datetime','datetime','string','datetime',
     'datetime','datetime','string','list','bytes','datetime','bool']
-    
+
     def __init__(self, connection, dbname, cache, credit_value="standard"):
         self.connection = connection
         self.dbname = dbname
-        self.credit_value = credit_value  
+        self.credit_value = credit_value
         self.cache = cache
-       
+
     def simple_cache(func):
         """Wraps each of the Snowflake query and returns results from cache if files exists locally.
         Else it runs the query and saves the results to a local file.
@@ -39,12 +39,12 @@ class SNFLKQuery():
             else:
                 print('Loading data from Snowflake...')
                 df =  func(self, *args, **kwargs)
-            
-            df.to_parquet(cache_file)    
+
+            df.to_parquet(cache_file)
             return df
-        
+
         return wrapper
-    
+
     ##TODO: Write this as a class level function instead of an instance level function
     def query_to_df(self, sql):
         cursor_obj = self.connection.cursor()
@@ -56,7 +56,7 @@ class SNFLKQuery():
             else:
                 dt_type[dd[0]] = SNFLKQuery.data_type_map[dd[1]]
                 data_one = data_one.astype({dd[0]: SNFLKQuery.data_type_map[dd[1]]})
-                
+
         data_one.columns = data_one.columns.str.lower()
         return data_one
 
@@ -161,25 +161,25 @@ class SNFLKQuery():
         compute_df = self.cost_of_compute_ts(start_date, end_date)
         cloud_service_df = self.cost_of_cloud_services_ts(start_date, end_date)
         material_df = self.cost_of_materialized_views_ts(start_date, end_date)
-        
+
         replication_df = self.cost_of_replication_ts(start_date, end_date)
         searchopt_df = self.cost_of_searchoptimization_ts(start_date, end_date)
         snowpipe_df = self.cost_of_snowpipe_ts(start_date, end_date)
         autocluster_df = self.cost_of_autoclustering_ts(start_date, end_date)
-        
+
         df_concat=pd.concat([compute_df,storage_df,cloud_service_df,material_df,replication_df,searchopt_df,snowpipe_df,autocluster_df],0)
         df_select=df_concat[['user_name','credits','dollars','start_time','end_time','category_name']]
-    
+
         return df_select
 
-    
+
     #TODO:
     # @simple_cache
     def cost_by_user(self, start_date, end_date):
         pass
 
     # @simple_cache
-   
+
 
     # @simple_cache
     ##TODO: This can be consolidated with cost_by_wh except this one right now
@@ -266,7 +266,7 @@ class SNFLKQuery():
             credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
         select database_name
-              
+
               ,schema_name
               ,table_name
               ,sum(credits_used) as credits
@@ -274,7 +274,7 @@ class SNFLKQuery():
               ,start_time
               ,end_time
               ,'Autoclustering' as category_name
-              
+
         from {self.dbname}.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY
         where start_time between '{start_date}' and '{end_date}'
         group by 1,2,3,6,7
@@ -311,7 +311,7 @@ class SNFLKQuery():
                 ,WMH.START_TIME
                 ,WMH.END_TIME
                 ,'Cloud services' as category_name
-                
+
         from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH where WMH.START_TIME between '{start_date}' and '{end_date}' order by 4 asc;
         """
 
@@ -393,7 +393,7 @@ class SNFLKQuery():
         ## later
         df = self.ts_remove_localization(self.query_to_df(sql))
         return df
-        
+
     # @simple_cache
     def cost_of_replication_ts(self, start_date='2022-01-01', end_date=''):
         """Calculates the cost of replication in time series used in a given time
@@ -410,7 +410,7 @@ class SNFLKQuery():
         credit_val = ''
         if self.credit_value:
             credit_val = SNFLKQuery.credit_values[self.credit_value]
-    
+
         sql=f"""
         select
             'Snowflake' as user_name,
@@ -421,8 +421,8 @@ class SNFLKQuery():
             ,end_time
             ,'Replication' as category_name
         from {self.dbname}.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY
-        
-            
+
+
 
         where start_time between '{start_date}' and '{end_date}'
         order by 4 desc;
@@ -510,7 +510,7 @@ class SNFLKQuery():
     def cost_of_storage_ts(self, start_date='2022-01-01', end_date=''):
         ##TODO: Distribute daily storage costs hourly over the day so that ts is consistent with other ts
         """
-        Calculates the overall cost of storage usage 
+        Calculates the overall cost of storage usage
         given time period using Storage Usage Su table.
         Outputs a dataframe with the fhollowing columns:
         Category name: Category name as Storage
@@ -523,13 +523,13 @@ class SNFLKQuery():
         sql = f"""
         select cost.category_name, cost.USAGE_DATE as start_time, cost.DOLLARS_USED as dollars, 'Snowflake' as user_name, 0 as credits from (
         SELECT
-                
+
                 'Storage' as category_name
                 ,SU.USAGE_DATE
-                
-                
+
+
                 ,((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23)/DA.DAYS_IN_MONTH as DOLLARS_USED
-        from    {self.dbname}.ACCOUNT_USAGE.STORAGE_USAGE SU 
+        from    {self.dbname}.ACCOUNT_USAGE.STORAGE_USAGE SU
         JOIN    (SELECT COUNT(*) AS DAYS_IN_MONTH,TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01') as DATE_MONTH
         FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM
         GROUP BY TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01')) DA
@@ -668,7 +668,7 @@ class SNFLKQuery():
 
 
 ## Query cost related queries
-##TODO: 1) Check query 2) Add flag to give unique query text with parameters 
+##TODO: 1) Check query 2) Add flag to give unique query text with parameters
     def n_expensive_queries(self, start_date='2022-01-01', end_date='', n=10):
         """
         Calculates expense of queries over a specific time period
@@ -744,4 +744,22 @@ class SNFLKQuery():
         """
         df = self.query_to_df(sql)
         return df
-    
+
+    def queries_spill_remote_storage(self, start_date='2022-01-01', end_date='', n=10):
+        """
+        Shows queries spilling maximum remote storage
+        """
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql = f"""
+        select query_text, user_name, role_name, warehouse_name, warehouse_size,
+        BYTES_SPILLED_TO_REMOTE_STORAGE, total_elapsed_time/1000 total_elapsed_time_seconds
+        from   {self.dbname}.account_usage.query_history
+        where  BYTES_SPILLED_TO_REMOTE_STORAGE > 0
+        and TO_DATE(start_time) between '{start_date}' and '{end_date}'
+        order  by BYTES_SPILLED_TO_REMOTE_STORAGE desc
+        limit {n};
+        """
+        df = self.query_to_df(sql)
+        return df
