@@ -763,3 +763,37 @@ class SNFLKQuery():
         """
         df = self.query_to_df(sql)
         return df
+    
+    def n_scanned_data(self, start_date='2022-01-01',end_date='2022-02-02',n=10):
+        """
+        Shows queries that scan the most data
+        """
+        
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql= f"""
+        select
+          
+          QUERY_ID
+          
+         
+         ,ROW_NUMBER() OVER(ORDER BY PARTITIONS_SCANNED DESC) as QUERY_ID_INT
+         ,QUERY_TEXT
+         ,TOTAL_ELAPSED_TIME/1000 AS QUERY_EXECUTION_TIME_SECONDS
+         ,PARTITIONS_SCANNED
+         ,PARTITIONS_TOTAL
+
+        from SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY Q
+        where 1=1
+        and TO_DATE(Q.START_TIME) >     DATEADD(month,-1,TO_DATE(CURRENT_TIMESTAMP())) 
+            and TOTAL_ELAPSED_TIME > 0 --only get queries that actually used compute
+            and ERROR_CODE iS NULL
+            and PARTITIONS_SCANNED is not null
+        
+        order by  PARTITIONS_SCANNED desc
+        
+        LIMIT {n}
+        """
+        df=self.query_to_df(sql)
+        return df
