@@ -745,7 +745,7 @@ class SNFLKQuery():
         df = self.query_to_df(sql)
         return df
 
-    def queries_spill_remote_storage(self, start_date='2022-01-01', end_date='', n=10):
+    def n_queries_spill_to_storage(self, start_date='2022-01-01', end_date='', n=10):
         """
         Shows queries spilling maximum remote storage
         """
