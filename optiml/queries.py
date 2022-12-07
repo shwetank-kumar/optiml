@@ -161,6 +161,7 @@ class SNFLKQuery():
         compute_df = self.cost_of_compute_ts(start_date, end_date)
         cloud_service_df = self.cost_of_cloud_services_ts(start_date, end_date)
         material_df = self.cost_of_materialized_views_ts(start_date, end_date)
+        
         replication_df = self.cost_of_replication_ts(start_date, end_date)
         searchopt_df = self.cost_of_searchoptimization_ts(start_date, end_date)
         snowpipe_df = self.cost_of_snowpipe_ts(start_date, end_date)
@@ -170,9 +171,6 @@ class SNFLKQuery():
         df_select=df_concat[['user_name','credits','dollars','start_time','end_time','category_name']]
     
         return df_select
-
-
-   
 
     
     #TODO:
