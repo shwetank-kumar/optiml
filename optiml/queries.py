@@ -764,7 +764,7 @@ class SNFLKQuery():
         df = self.query_to_df(sql)
         return df
     
-    def n_scanned_data(self, start_date='2022-01-01',end_date='2022-02-02',n=10):
+    def n_queries_scanned_most_data(self, start_date='2022-01-01',end_date='2022-02-02',n=10):
         """
         Shows queries that scan the most data
         """
