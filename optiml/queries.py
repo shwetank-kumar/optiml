@@ -162,7 +162,7 @@ class SNFLKQuery():
         autocluster_df = self.cost_of_autoclustering_ts(start_date, end_date)
         
         df_concat=pd.concat([compute_df,storage_df,cloud_service_df,material_df,replication_df,searchopt_df,snowpipe_df,autocluster_df],0)
-        df_select=df_concat[['user_name','credits','start_time','end_time','category_name']]
+        df_select=df_concat[['user_name','credits','dollars','start_time','end_time','category_name']]
     
         return df_select
 
@@ -519,7 +519,7 @@ class SNFLKQuery():
             today_date = date.today()
             end_date = str(today_date)
         sql = f"""
-        select cost.category_name, cost.USAGE_DATE as start_time, cost.DOLLARS_USED as dollars, 'Snowflake' as user_name from (
+        select cost.category_name, cost.USAGE_DATE as start_time, cost.DOLLARS_USED as dollars, 'Snowflake' as user_name, '0' as credits from (
         SELECT
                 
                 'Storage' as category_name
