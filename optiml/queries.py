@@ -60,11 +60,6 @@ class SNFLKQuery():
         data_one.columns = data_one.columns.str.lower()
         return data_one
 
-    def ts_remove_localization(self, df):
-        df["start_time"] = [d.tz_localize(None) for d in df["start_time"]]
-        df["end_time"] = [d.tz_localize(None) for d in df["end_time"]]
-        return df
-
     ##TODO: Add a decorator to read from a materialized view if available
     # @simple_cache
     def total_cost_breakdown(self, start_date='2022-01-01', end_date=''):
@@ -215,10 +210,7 @@ class SNFLKQuery():
                 group by 1,2,4,5
                 order by 4 asc;
         """
-        ## Removing localization on the timestamp so it can bite us in the ass
-        ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
-        return df
+        return self.query_to_df(sql)
 
     # @simple_cache
     def cost_by_wh(self, start_date='2022-01-01', end_date=''):
@@ -282,10 +274,7 @@ class SNFLKQuery():
         group by 1,2,3,6,7
         order by 6 desc;
         """
-        ## Removing localization on the timestamp so it can bite us in the ass
-        ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
-        return df
+        return self.query_to_df(sql)
 
     # @simple_cache
     def cost_of_cloud_services_ts(self, start_date='2022-01-01', end_date=''):
@@ -317,10 +306,7 @@ class SNFLKQuery():
         from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH where WMH.START_TIME between '{start_date}' and '{end_date}' order by 4 asc;
         """
 
-        ## Removing localization on the timestamp so it can bite us in the ass
-        ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
-        return df
+        return self.query_to_df(sql)
 
     # @simple_cache
     def cost_of_compute_ts(self, start_date='2022-01-01', end_date=''):
@@ -353,7 +339,9 @@ class SNFLKQuery():
         """
         ## Removing localization on the timestamp so it can bite us in the ass
         ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
+        df = self.query_to_df(sql)
+        df["start_time"] = [d.tz_localize(None) for d in df["start_time"]]
+        df["end_time"] = [d.tz_localize(None) for d in df["end_time"]]
         return df
 
     # @simple_cache
@@ -393,9 +381,11 @@ class SNFLKQuery():
         """
         ## Removing localization on the timestamp so it can bite us in the ass
         ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
+        df = self.query_to_df(sql)
+        df["start_time"] = [d.tz_localize(None) for d in df["start_time"]]
+        df["end_time"] = [d.tz_localize(None) for d in df["end_time"]]
         return df
-        
+
     # @simple_cache
     def cost_of_replication_ts(self, start_date='2022-01-01', end_date=''):
         """Calculates the cost of replication in time series used in a given time
@@ -432,7 +422,9 @@ class SNFLKQuery():
 
         ## Removing localization on the timestamp so it can bite us in the ass
         ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
+        df = self.query_to_df(sql)
+        df["start_time"] = [d.tz_localize(None) for d in df["start_time"]]
+        df["end_time"] = [d.tz_localize(None) for d in df["end_time"]]
         return df
 
     # @simple_cache
@@ -469,7 +461,9 @@ class SNFLKQuery():
 
         ## Removing localization on the timestamp so it can bite us in the ass
         ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
+        df = self.query_to_df(sql)
+        df["start_time"] = [d.tz_localize(None) for d in df["start_time"]]
+        df["end_time"] = [d.tz_localize(None) for d in df["end_time"]]
         return df
 
     # @simple_cache
@@ -505,7 +499,9 @@ class SNFLKQuery():
         """
         ## Removing localization on the timestamp so it can bite us in the ass
         ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
+        df = self.query_to_df(sql)
+        df["start_time"] = [d.tz_localize(None) for d in df["start_time"]]
+        df["end_time"] = [d.tz_localize(None) for d in df["end_time"]]
         return df
 
     # @simple_cache
@@ -523,7 +519,7 @@ class SNFLKQuery():
             today_date = date.today()
             end_date = str(today_date)
         sql = f"""
-        select cost.category_name, cost.USAGE_DATE as start_time, cost.DOLLARS_USED as dollars, 'Snowflake' as user_name, '0' as credits from (
+        select cost.category_name, cost.USAGE_DATE as start_time, cost.DOLLARS_USED as dollars, 'Snowflake' as user_name, 0 as credits from (
         SELECT
                 
                 'Storage' as category_name
@@ -545,7 +541,6 @@ class SNFLKQuery():
         df.reset_index(inplace=True)
         df.insert(1, "end_time", df["start_time"] + pd.offsets.Hour(1))
         return df
-
     def cost_by_partner_tool_ts(self, start_date='2022-01-01', end_date=''):
         ##TODO: Convert partner tool consumption query into
         # a hourly timeseries so that its consistent with others and can be plotted out
@@ -656,9 +651,8 @@ class SNFLKQuery():
             order by 1 asc, 3 desc
             ;
         """
-        ## Removing localization on the timestamp so it can bite us in the ass
-        ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
+
+        df = self.query_to_df(sql)
         return df
 
 ## Config related queries
