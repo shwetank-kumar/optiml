@@ -800,7 +800,7 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
         return df
     
-    def n_cached_queries(self, start_date='2022-01-01',end_date=''):
+    def n_most_cached_queries(self, start_date='2022-01-01',end_date=''):
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
