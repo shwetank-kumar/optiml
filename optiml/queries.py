@@ -875,7 +875,7 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
         return df
     # They will show up if they have been accessed
-    def table_accessed(self,start_date="2022-01-01", end_date="2022-02-02"):
+    def table_accessed(self,start_date="2022-01-01", end_date=""):
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -890,6 +890,8 @@ class SNFLKQuery():
         """
         df=self.query_to_df(sql)
         return df
+
+
 
         
         
