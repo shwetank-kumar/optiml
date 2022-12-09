@@ -842,5 +842,63 @@ class SNFLKQuery():
 
         df=self.query_to_df(sql)
         return df
-
+        #Do we want 30 day logins
+    def idle_users(self, start_date='2022-01-01',end_date=''):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql=f"""
+        SELECT *
+        FROM {self.dbname}.ACCOUNT_USAGE.USERS 
+        WHERE LAST_SUCCESS_LOGIN < DATEADD(month, -1, CURRENT_TIMESTAMP()) 
+        AND DELETED_ON IS NULL
+        """
+        df=self.query_to_df(sql)
+        return df
+    def users_full_table_scans(self, start_date='2022-01-01',end_date='',n=10):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql=f"""
+        SELECT USER_NAME
+        ,COUNT(*) as COUNT_OF_QUERIES
+        FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY
+        WHERE START_TIME >= dateadd(month,-1,current_timestamp())
+        AND PARTITIONS_SCANNED > (PARTITIONS_TOTAL*0.95)
+        AND QUERY_TYPE NOT LIKE 'CREATE%'
+        group by 1
+        order by 2 desc;
+        
+        """
+        df=self.query_to_df(sql)
+       
+        return df
+    def heavy_users(self, start_date='2022-01-01',end_date='',n=10):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql=f"""
+        select 
+        User_name
+        , warehouse_name
+        , avg(case when partitions_total > 0 then partitions_scanned / partitions_total else 0 end) avg_pct_scanned
+        from   {self.dbname}.account_usage.query_history
+        where  start_time::date > dateadd('days', -45, current_date)
+        group by 1, 2
+        order by 3 desc"""
+        df=self.query_to_df(sql)
+        return df
+    def users_never_logged_in(self,start_date="2022-02-02", end_date=""):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql=f"""
+        SELECT *
+        FROM {self.dbname}.ACCOUNT_USAGE.USERS 
+        WHERE LAST_SUCCESS_LOGIN IS NULL;
+        """
+        df=self.query_to_df(sql)
+        return df
     
+
+  
