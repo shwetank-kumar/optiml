@@ -133,8 +133,6 @@ class SNFLKQuery():
                       ,credits_used as credits
                       ,({credit_val}*credits) as dollars
                       ,({credit_val}*credits_used_cloud_services) as cloud_services_dollars
-                      ,date_trunc('hour', start_time) as hourly_start_time
-                      ,date_trunc('hour', end_time) as hourly_end_time
                       ,start_time
                       ,end_time
                 from {self.dbname}.account_usage.warehouse_metering_history
