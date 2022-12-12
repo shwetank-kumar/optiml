@@ -51,7 +51,7 @@ class SnowflakeConnConfig:
         '''Get credentials from an existing standards installation of snowsql. Return as a dict'''
         cnfg = {}
         snowsql_config_fn = Path("~/.snowsql/config").expanduser().resolve()
-        print(snowsql_config_fn)
+        # print(snowsql_config_fn)
         if snowsql_config_fn.exists():
             logging.info(f"Looking up credentials in {snowsql_config_fn}")
             config = configparser.ConfigParser()
