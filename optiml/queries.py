@@ -102,7 +102,7 @@ class SNFLKQuery():
         autocluster_df = self.cost_of_autoclustering_ts(start_date, end_date)
 
         df_concat=pd.concat([compute_df,storage_df,cloud_service_df,material_df,replication_df,searchopt_df,snowpipe_df,autocluster_df],0)
-        df_select=df_concat[['user_name','credits','dollars','start_time','end_time','category_name']]
+        df_select=df_concat[['user_name','credits','dollars','hourly_start_time','category_name']]
 
         return df_select
 
@@ -347,7 +347,7 @@ class SNFLKQuery():
             ,table_name
             ,credits_used as credits
             ,({credit_val}*credits) as dollars
-            ,date_trunc('hour', WMH.start_time) as hourly_start_time
+            ,date_trunc('hour', start_time) as hourly_start_time
             ,'Snowflake' as user_name
             ,'Search optimization' as category_name
         from {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY
