@@ -61,8 +61,8 @@ class SNFLKQuery():
         return data_one
 
     def ts_remove_localization(self, df):
-        df["start_time"] = [d.tz_localize(None) for d in df["start_time"]]
-        df["end_time"] = [d.tz_localize(None) for d in df["end_time"]]
+        df["hourly_start_time"] = [d.tz_localize(None) for d in df["hourly_start_time"]]
+        #df["end_time"] = [d.tz_localize(None) for d in df["end_time"]]
         return df
 
     ##@simple_cache
@@ -103,7 +103,7 @@ class SNFLKQuery():
         autocluster_df = self.cost_of_autoclustering_ts(start_date, end_date)
 
         df_concat=pd.concat([compute_df,storage_df,cloud_service_df,material_df,replication_df,searchopt_df,snowpipe_df,autocluster_df],0)
-        df_select=df_concat[['user_name','credits','dollars','start_time','end_time','category_name']]
+        df_select=df_concat[['user_name','credits','dollars','hourly_start_time','category_name']]
 
         return df_select
 
@@ -136,8 +136,7 @@ class SNFLKQuery():
                       ,({credit_val}*credits) as dollars
                       ,credits_used_cloud_services as cloud_services_credits
                       ,({credit_val}*credits_used_cloud_services) as cloud_services_dollars
-                      ,start_time
-                      ,end_time
+                      ,date_trunc('hour', start_time) as hourly_start_time
                 from {self.dbname}.account_usage.warehouse_metering_history
                 where start_time between '{start_date}' and '{end_date}' -->= dateadd(day, -5, current_timestamp())
                 order by 4 asc;
@@ -146,36 +145,6 @@ class SNFLKQuery():
         ## later
         df = self.ts_remove_localization(self.query_to_df(sql))
         return df
-
-    # @simple_cache
-    def cost_by_wh(self, start_date='2022-01-01', end_date=''):
-        """Calculates the total cost of compute and cloud services according to
-        warehouse for a given time period using Warehouse Metering History table.
-        Outputs a dataframe with the following columns:
-        Warehouse Name: Name of the Warehouse
-        Total credits used: Total credits used during the billing period
-        TOTAL_DOLLARS_USED: Total cost of credits (in dollars) used during a
-        selected billing period calculated according to selected account type
-        """
-        if not end_date:
-            today_date = date.today()
-            end_date = str(today_date)
-        credit_val = ''
-        if self.credit_value:
-            credit_val = SNFLKQuery.credit_values[self.credit_value]
-        sql = f"""
-                select warehouse_name
-                      ,sum(credits_used) as credits
-                      ,sum(({credit_val}*credits)) as dollars
-                      ,sum(({credit_val}*credits_used_cloud_services)) as cloud_services_dollars
-                      ,start_time
-                      ,end_time
-                from {self.dbname}.account_usage.warehouse_metering_history
-                where start_time between '{start_date}' and '{end_date}' -->= dateadd(day, -5, current_timestamp())
-                group by 4,5
-                order by 1 desc;
-        """
-        return self.query_to_df(sql)
 
     # @simple_cache
     def cost_of_autoclustering_ts(self, start_date='2022-01-01', end_date=''):
@@ -203,13 +172,12 @@ class SNFLKQuery():
               ,table_name
               ,sum(credits_used) as credits
               ,({credit_val}*credits) as dollars
-              ,start_time
-              ,end_time
+              ,date_trunc('hour', start_time) as hourly_start_time
               ,'Autoclustering' as category_name
 
         from {self.dbname}.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY
         where start_time between '{start_date}' and '{end_date}'
-        group by 1,2,3,6,7
+        group by 1,2,3,6
         order by 6 desc;
         """
         ## Removing localization on the timestamp so it can bite us in the ass
@@ -240,8 +208,7 @@ class SNFLKQuery():
                 ,WMH.WAREHOUSE_NAME
                 ,WMH.CREDITS_USED_CLOUD_SERVICES as credits
                 ,({credit_val}*credits) as dollars
-                ,WMH.START_TIME
-                ,WMH.END_TIME
+                ,date_trunc('hour',WMH.start_time) as hourly_start_time
                 ,'Cloud services' as category_name
 
         from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH where WMH.START_TIME between '{start_date}' and '{end_date}' order by 4 asc;
@@ -275,8 +242,7 @@ class SNFLKQuery():
                  WMH.WAREHOUSE_NAME
                 ,WMH.CREDITS_USED_COMPUTE as credits
                 ,({credit_val}*credits) as dollars
-                ,WMH.START_TIME
-                ,WMH.END_TIME
+                ,date_trunc('hour', WMH.start_time) as hourly_start_time
                 ,'Compute' as category_name
         from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH inner join {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_EVENTS_HISTORY WEH on WMH.WAREHOUSE_ID = WEH.WAREHOUSE_ID
         where WMH.START_TIME between '{start_date}' and '{end_date}' order by 4 asc;
@@ -314,8 +280,7 @@ class SNFLKQuery():
             ,credits_used as credits
             ,'Snowflake' as user_name
             ,({credit_val}*credits) as dollars
-            ,start_time
-            ,end_time
+            ,date_trunc('hour', start_time) as hourly_start_time
             ,'Materialized views' as category_name
         from {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY
         where start_time between '{start_date}' and '{end_date}'
@@ -349,13 +314,9 @@ class SNFLKQuery():
              database_name
             ,credits_used as credits
             ,({credit_val}*credits) as dollars
-            ,start_time
-            ,end_time
+            ,date_trunc('hour', start_time) as hourly_start_time
             ,'Replication' as category_name
         from {self.dbname}.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY
-
-
-
         where start_time between '{start_date}' and '{end_date}'
         order by 4 desc;
         """
@@ -389,8 +350,7 @@ class SNFLKQuery():
             ,table_name
             ,credits_used as credits
             ,({credit_val}*credits) as dollars
-            ,start_time
-            ,end_time
+            ,date_trunc('hour', start_time) as hourly_start_time
             ,'Snowflake' as user_name
             ,'Search optimization' as category_name
         from {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY
@@ -425,8 +385,7 @@ class SNFLKQuery():
             'Snowflake' as user_name
             ,pipe_name
             ,credits_used as credits
-            ,start_time
-            ,end_time
+            ,date_trunc('hour', start_time) as hourly_start_time
             ,({credit_val}*credits) as dollars
             ,'Snowpipe' as category_name
           from {self.dbname}.ACCOUNT_USAGE.PIPE_USAGE_HISTORY
@@ -550,7 +509,7 @@ class SNFLKQuery():
                     else 'NOT YET MAPPED: ' || client_application_id
                     end as client_application_name
                 ,warehouse_name
-                ,date_trunc('hour',start_time) as start_time_hour
+                ,date_trunc('hour',start_time) as hourly_start_time
                 ,sum(execution_time)  as client_hour_execution_time
                 from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY qh
                 join {self.dbname}.ACCOUNT_USAGE.SESSIONS se on se.session_id = qh.session_id
