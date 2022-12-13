@@ -6,9 +6,9 @@ import pathlib
 
 class SNFLKQuery():
     credit_values = {
-    "standard": 2,
-    "enterprise": 3,
-    "business critical": 4
+    "standard": 2.0,
+    "enterprise": 3.0,
+    "business critical": 4.0
     }
     ##TODO: Set this as a class level property and capitalize
     data_type_map = ['float','float','string','datetime','datetime','string','datetime',
@@ -111,7 +111,9 @@ class SNFLKQuery():
     ##TODO: This can be consolidated with cost_by_wh except this one right now
     ## seems to not be taking cloud service cost into account while cost_by_wh is
     def cost_by_wh_ts(self, start_date='2022-01-01', end_date=''):
-        """Calculates the total cost of compute and cloud services in a time
+        """
+        Returns results only for ACCOUNTADMIN role or any other role that has been granted MONITOR USAGE global privilege
+        Calculates the total cost of compute and cloud services in a time
         series according to warehouse for a given time period using Warehouse
         Metering History table.
         Outputs a dataframe with the following columns:
@@ -132,6 +134,7 @@ class SNFLKQuery():
                 select warehouse_name
                       ,credits_used as credits
                       ,({credit_val}*credits) as dollars
+                      ,credits_used_cloud_services as cloud_services_credits
                       ,({credit_val}*credits_used_cloud_services) as cloud_services_dollars
                       ,start_time
                       ,end_time
