@@ -448,115 +448,67 @@ class SNFLKQuery():
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
-        # sql = f"""-- THIS IS APPROXIMATE CREDIT CONSUMPTION BY CLIENT APPLICATION
-        #     with client_hour_execution_cte as (
-        #         select  case
-        #             when client_application_id like 'Go %' then 'Go'
-        #             when client_application_id like 'Snowflake UI %' then 'Snowflake UI'
-        #             when client_application_id like 'SnowSQL %' then 'SnowSQL'
-        #             when client_application_id like 'JDBC %' then 'JDBC'
-        #             when client_application_id like 'PythonConnector %' then 'Python'
-        #             when client_application_id like 'ODBC %' then 'ODBC'
-        #             else 'NOT YET MAPPED: ' || client_application_id
-        #             end as client_application_name
-        #         ,warehouse_name
-        #         ,date_trunc('hour',start_time) as start_time_hour
-        #         ,sum(execution_time)  as client_hour_execution_time
-        #         from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY qh
-        #         join {self.dbname}.ACCOUNT_USAGE.SESSIONS se on se.session_id = qh.session_id
-        #         where warehouse_name is not null
-        #             and execution_time > 0
-
-        #     -- Change the below filter if you want to look at a longer range than the last 1 month
-        #             and start_time between '{start_date}' and '{end_date}'
-        #         group by 1,2,3
-        #         )
-        #     , hour_execution_cte as (
-        #         select start_time_hour
-        #             ,warehouse_name
-        #             ,sum(client_hour_execution_time) as hour_execution_time
-        #         from client_hour_execution_cte
-        #         group by 1,2
-        #     )
-        #     , approximate_credits as (
-        #         select
-        #             a.client_application_name
-        #             ,c.warehouse_name
-        #             ,(a.client_hour_execution_time/b.hour_execution_time)*c.credits_used as approximate_credits_used
-
-        #         from client_hour_execution_cte a
-        #         join hour_execution_cte b  on a.start_time_hour = b.start_time_hour and b.warehouse_name = a.warehouse_name
-        #         join {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY c on c.warehouse_name = a.warehouse_name and c.start_time = a.start_time_hour
-        #     )
-
-        #     select
-        #         client_application_name
-        #         ,warehouse_name
-        #         ,sum(approximate_credits_used) as approximate_credits_used
-        #     from approximate_credits
-        #     group by 1,2
-        #     order by 3 desc--THIS IS APPROXIMATE CREDIT CONSUMPTION BY CLIENT APPLICATION
-
-        sql=f"""
-        --THIS IS APPROXIMATE CREDIT CONSUMPTION BY CLIENT APPLICATION
-WITH CLIENT_HOUR_EXECUTION_CTE AS (
-    SELECT  CASE
-         WHEN CLIENT_APPLICATION_ID LIKE 'Go %' THEN 'Go'
-         WHEN CLIENT_APPLICATION_ID LIKE 'Snowflake UI %' THEN 'Snowflake UI'
-         WHEN CLIENT_APPLICATION_ID LIKE 'SnowSQL %' THEN 'SnowSQL'
-         WHEN CLIENT_APPLICATION_ID LIKE 'JDBC %' THEN 'JDBC'
-         WHEN CLIENT_APPLICATION_ID LIKE 'PythonConnector %' THEN 'Python'
-         WHEN CLIENT_APPLICATION_ID LIKE 'ODBC %' THEN 'ODBC'
-         ELSE 'NOT YET MAPPED: ' || CLIENT_APPLICATION_ID
-       END AS CLIENT_APPLICATION_NAME
-    ,WAREHOUSE_NAME
-    ,DATE_TRUNC('hour',START_TIME) as hourly_start_time
-    ,SUM(EXECUTION_TIME)  as CLIENT_HOUR_EXECUTION_TIME
-    FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
-    JOIN {self.dbname}.ACCOUNT_USAGE.SESSIONS SE ON SE.SESSION_ID = QH.SESSION_ID
-    WHERE WAREHOUSE_NAME IS NOT NULL
-    AND EXECUTION_TIME > 0
-  
- --Change the below filter if you want to look at a longer range than the last 1 month 
-    AND START_TIME  between '{start_date}' and '{end_date}'
-    group by 1,2,3
-    )
-, HOUR_EXECUTION_CTE AS (
-    SELECT  hourly_start_time
-    ,WAREHOUSE_NAME
-    ,SUM(CLIENT_HOUR_EXECUTION_TIME) AS HOUR_EXECUTION_TIME
-    FROM CLIENT_HOUR_EXECUTION_CTE
-    group by 1,2
-)
-, APPROXIMATE_CREDITS AS (
-    SELECT 
-    A.CLIENT_APPLICATION_NAME
-    ,C.WAREHOUSE_NAME
-    ,(A.CLIENT_HOUR_EXECUTION_TIME/B.HOUR_EXECUTION_TIME)*C.CREDITS_USED AS APPROXIMATE_CREDITS_USED
-    ,A.hourly_start_time as hourly_start_time
-    FROM CLIENT_HOUR_EXECUTION_CTE A
-    JOIN HOUR_EXECUTION_CTE B  ON A.hourly_start_time = B.hourly_start_time and B.WAREHOUSE_NAME = A.WAREHOUSE_NAME
-    JOIN {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY C ON C.WAREHOUSE_NAME = A.WAREHOUSE_NAME AND C.START_TIME = A.hourly_start_time
-)
-
-SELECT 
- CLIENT_APPLICATION_NAME
-,WAREHOUSE_NAME
-,SUM(APPROXIMATE_CREDITS_USED) AS APPROXIMATE_CREDITS_USED
-,hourly_start_time
-FROM APPROXIMATE_CREDITS
-GROUP BY 1,2,4
-ORDER BY 3 DESC
-;
         
-"""
+        sql=f"""
+            --THIS IS APPROXIMATE CREDIT CONSUMPTION BY CLIENT APPLICATION
+            WITH CLIENT_HOUR_EXECUTION_CTE AS (
+                SELECT  CASE
+                    WHEN CLIENT_APPLICATION_ID LIKE 'Go %' THEN 'Go'
+                    WHEN CLIENT_APPLICATION_ID LIKE 'Snowflake UI %' THEN 'Snowflake UI'
+                    WHEN CLIENT_APPLICATION_ID LIKE 'SnowSQL %' THEN 'SnowSQL'
+                    WHEN CLIENT_APPLICATION_ID LIKE 'JDBC %' THEN 'JDBC'
+                    WHEN CLIENT_APPLICATION_ID LIKE 'PythonConnector %' THEN 'Python'
+                    WHEN CLIENT_APPLICATION_ID LIKE 'ODBC %' THEN 'ODBC'
+                    ELSE 'NOT YET MAPPED: ' || CLIENT_APPLICATION_ID
+                END AS CLIENT_APPLICATION_NAME
+                ,WAREHOUSE_NAME
+                ,DATE_TRUNC('hour',START_TIME) as hourly_start_time
+                ,SUM(EXECUTION_TIME)  as CLIENT_HOUR_EXECUTION_TIME
+                FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
+                JOIN {self.dbname}.ACCOUNT_USAGE.SESSIONS SE ON SE.SESSION_ID = QH.SESSION_ID
+                WHERE WAREHOUSE_NAME IS NOT NULL
+                AND EXECUTION_TIME > 0
+            
+            --Change the below filter if you want to look at a longer range than the last 1 month 
+                AND START_TIME  between '{start_date}' and '{end_date}'
+                group by 1,2,3
+                )
+            , HOUR_EXECUTION_CTE AS (
+                SELECT  hourly_start_time
+                ,WAREHOUSE_NAME
+                ,SUM(CLIENT_HOUR_EXECUTION_TIME) AS HOUR_EXECUTION_TIME
+                FROM CLIENT_HOUR_EXECUTION_CTE
+                group by 1,2
+            )
+            , APPROXIMATE_CREDITS AS (
+                SELECT 
+                A.CLIENT_APPLICATION_NAME
+                ,C.WAREHOUSE_NAME
+                ,(A.CLIENT_HOUR_EXECUTION_TIME/B.HOUR_EXECUTION_TIME)*C.CREDITS_USED AS APPROXIMATE_CREDITS_USED
+                ,A.hourly_start_time as hourly_start_time
+                FROM CLIENT_HOUR_EXECUTION_CTE A
+                JOIN HOUR_EXECUTION_CTE B  ON A.hourly_start_time = B.hourly_start_time and B.WAREHOUSE_NAME = A.WAREHOUSE_NAME
+                JOIN {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY C ON C.WAREHOUSE_NAME = A.WAREHOUSE_NAME AND C.START_TIME = A.hourly_start_time
+            )
+
+            SELECT 
+            CLIENT_APPLICATION_NAME
+            ,WAREHOUSE_NAME
+            ,SUM(APPROXIMATE_CREDITS_USED) AS APPROXIMATE_CREDITS_USED
+            ,hourly_start_time
+            FROM APPROXIMATE_CREDITS
+            GROUP BY 1,2,4
+            ORDER BY 3 DESC
+            ;
+        
+        """
         ## Removing localization on the timestamp so it can bite us in the ass
         ## later
         # df = self.ts_remove_localization(self.query_to_df(sql))
-        df = self.query_to_df(sql)
+        df = self.ts_remove_localization(self.query_to_df(sql))
         return df
 
-## Config related queries
+    ## Config related queries
     def warehouse_config(self):
         """Gives the details of the wareouse config"""
         sql = f"""select * from {self.dbname}.account_usage.warehouses"""
@@ -564,8 +516,8 @@ ORDER BY 3 DESC
         return df
 
 
-## Query cost related queries
-##TODO: 1) Check query 2) Add flag to give unique query text with parameters
+    ## Query cost related queries
+    ##TODO: 1) Check query 2) Add flag to give unique query text with parameters
     def n_expensive_queries(self, start_date='2022-01-01', end_date='', n=10):
         """
         Calculates expense of queries over a specific time period
