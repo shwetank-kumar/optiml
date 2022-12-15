@@ -666,6 +666,7 @@ class SNFLKQuery():
         
         df=self.query_to_df(sql)
         return df
+
     def n_most_executed_queries(self, start_date='2022-01-01',end_date=''):
         if not end_date:
             today_date = date.today()
@@ -686,6 +687,7 @@ class SNFLKQuery():
 
         df=self.query_to_df(sql)
         return df
+
         #Do we want 30 day logins
     def idle_users(self, start_date='2022-01-01',end_date=''):
         if not end_date:
@@ -699,6 +701,7 @@ class SNFLKQuery():
         """
         df=self.query_to_df(sql)
         return df
+        
     def users_full_table_scans(self, start_date='2022-01-01',end_date='',n=10):
         if not end_date:
             today_date = date.today()
