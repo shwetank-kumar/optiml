@@ -809,6 +809,21 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
         return df
 
+    def idle_warehouses(self,start_date="2022-01-01", end_date="", no_of_days=-10):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+
+        sql=f"""
+            select NAME, SIZE, RUNNING from {self.dbname}.ACCOUNT_USAGE.WAREHOUSES a
+                left join (select distinct WAREHOUSE_NAME from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY
+                            WHERE START_TIME > dateadd('month', {no_of_days}, current_timestamp())
+                ) b on b.WAREHOUSE_NAME = a.name
+            where b.WAREHOUSE_NAME is null;;
+        """
+        
+        df=self.query_to_df(sql)
+        return df 
 
 
         
