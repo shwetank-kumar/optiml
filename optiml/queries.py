@@ -518,7 +518,7 @@ class SNFLKQuery():
 
     ## Query cost related queries
     ##TODO: 1) Check query 2) Add flag to give unique query text with parameters
-    def n_expensive_queries(self, start_date='2022-01-01', end_date='', n=10):
+    def n_expensive_queries(self, start_date='2022-01-01', end_date=''):
         """
         Calculates expense of queries over a specific time period
         """
@@ -530,66 +530,67 @@ class SNFLKQuery():
             credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
         WITH WAREHOUSE_SIZE AS
-        (
-             SELECT WAREHOUSE_SIZE, NODES
-               FROM (
-                      SELECT 'XSMALL' AS WAREHOUSE_SIZE, 1 AS NODES
-                      UNION ALL
-                      SELECT 'SMALL' AS WAREHOUSE_SIZE, 2 AS NODES
-                      UNION ALL
-                      SELECT 'MEDIUM' AS WAREHOUSE_SIZE, 4 AS NODES
-                      UNION ALL
-                      SELECT 'LARGE' AS WAREHOUSE_SIZE, 8 AS NODES
-                      UNION ALL
-                      SELECT 'XLARGE' AS WAREHOUSE_SIZE, 16 AS NODES
-                      UNION ALL
-                      SELECT '2XLARGE' AS WAREHOUSE_SIZE, 32 AS NODES
-                      UNION ALL
-                      SELECT '3XLARGE' AS WAREHOUSE_SIZE, 64 AS NODES
-                      UNION ALL
-                      SELECT '4XLARGE' AS WAREHOUSE_SIZE, 128 AS NODES
-                    )
-        ),
-        QUERY_HISTORY AS
-        (
-             SELECT QH.QUERY_ID
-                   ,QH.QUERY_TEXT
-                   ,QH.USER_NAME
-                   ,QH.ROLE_NAME
-                   ,QH.EXECUTION_TIME
-                   ,QH.WAREHOUSE_SIZE
-              FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
-             WHERE START_TIME between '{start_date}' and '{end_date}'
-        )
-        SELECT QH.QUERY_ID
-              ,QH.QUERY_TEXT
-              ,QH.USER_NAME
-              ,QH.ROLE_NAME
-              ,(QH.EXECUTION_TIME/(1000*60)) AS EXECUTION_TIME_MINUTES
-              ,WS.WAREHOUSE_SIZE
-              ,WS.NODES
-              ,WC.CREDITS
-              ,(WC.DOLLARS/QC.QUERY_COUNT) as cost_per_query
-        FROM QUERY_HISTORY QH
-        JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
-        JOIN  (
-            SELECT
-               WAREHOUSE_NAME
-              ,COUNT(QUERY_ID) as QUERY_COUNT
-            FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY
-            WHERE TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
-            GROUP BY WAREHOUSE_NAME
-              ) QC
-        JOIN (
-            SELECT
-                WAREHOUSE_NAME
-                ,SUM(CREDITS_USED) as CREDITS
-                ,SUM(CREDITS_USED)*({credit_val}) as DOLLARS
-            FROM {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY
-            WHERE TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
-            GROUP BY WAREHOUSE_NAME
-          ) WC
-        ORDER BY CREDITS DESC LIMIT {n}
+(
+     SELECT WAREHOUSE_SIZE, NODES
+       FROM (
+              SELECT 'XSMALL' AS WAREHOUSE_SIZE, 1 AS NODES
+              UNION ALL
+              SELECT 'SMALL' AS WAREHOUSE_SIZE, 2 AS NODES
+              UNION ALL
+              SELECT 'MEDIUM' AS WAREHOUSE_SIZE, 4 AS NODES
+              UNION ALL
+              SELECT 'LARGE' AS WAREHOUSE_SIZE, 8 AS NODES
+              UNION ALL
+              SELECT 'XLARGE' AS WAREHOUSE_SIZE, 16 AS NODES
+              UNION ALL
+              SELECT '2XLARGE' AS WAREHOUSE_SIZE, 32 AS NODES
+              UNION ALL
+              SELECT '3XLARGE' AS WAREHOUSE_SIZE, 64 AS NODES
+              UNION ALL
+              SELECT '4XLARGE' AS WAREHOUSE_SIZE, 128 AS NODES
+            )
+),
+QUERY_HISTORY AS
+(
+     SELECT QH.QUERY_ID
+           ,QH.QUERY_TEXT
+           ,QH.USER_NAME
+           ,QH.ROLE_NAME
+           ,QH.EXECUTION_TIME
+           ,QH.WAREHOUSE_SIZE
+      FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
+     WHERE START_TIME between '{start_date}' and '{end_date}'
+)
+
+SELECT QH.QUERY_ID
+     
+      ,QH.QUERY_TEXT
+      ,QH.USER_NAME
+      ,QH.ROLE_NAME
+      ,(QH.EXECUTION_TIME/(1000*60*60)) AS EXECUTION_TIME_HOURS
+      ,WS.WAREHOUSE_SIZE
+      ,WS.NODES
+      ,QH.WAREHOUSE_NAME
+      ,QH.BYTES_SPILLED_TO_REMOTE_STORAGE
+      
+      ,(QH.EXECUTION_TIME/(1000*60*60))*WS.NODES as RELATIVE_PERFORMANCE_COST
+      ,QH.PARTITIONS_SCANNED
+      ,QH.PARTITIONS_TOTAL
+      ,QH.CLUSTER_NUMBER
+      ,QH.QUERY_TYPE
+      ,QH.EXECUTION_STATUS
+      ,QH.DATABASE_NAME
+      ,QH.SCHEMA_NAME
+      ,QH.TOTAL_ELAPSED_TIME
+
+FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
+JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
+ORDER BY RELATIVE_PERFORMANCE_COST DESC
+LIMIT 10
+;
+
+        
+        
         """
         df = self.query_to_df(sql)
         return df
@@ -666,7 +667,7 @@ class SNFLKQuery():
         
         df=self.query_to_df(sql)
         return df
-
+    
     def n_most_executed_queries(self, start_date='2022-01-01',end_date=''):
         if not end_date:
             today_date = date.today()
@@ -687,8 +688,8 @@ class SNFLKQuery():
 
         df=self.query_to_df(sql)
         return df
-
-        #Do we want 30 day logins
+        
+    #Do we want 30 day logins
     def idle_users(self, start_date='2022-01-01',end_date=''):
         if not end_date:
             today_date = date.today()
