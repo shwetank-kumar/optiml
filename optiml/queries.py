@@ -669,7 +669,10 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
         return df
     
-    ##TODO: Update query output columns to be same as expensive queries - you cant do query ID since you are grouping on counts so everything except that
+    ##TODO: Update query output columns to be same as expensive queries - you cant do query ID since 
+    # you are grouping on counts so everything except that
+    ##TODO: Convert this into N most frequently executed Select queries so these can be identified 
+    # as targets for creating new tables or materialized views
     def n_most_executed_queries(self, start_date='2022-01-01',end_date='', n=10):
         if not end_date:
             today_date = date.today()
@@ -677,13 +680,14 @@ class SNFLKQuery():
         sql=f"""
         SELECT 
         QUERY_TEXT
+        query_type
         ,count(*) as number_of_times_executed
         from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY 
         where 1=1
         and TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
         and TOTAL_ELAPSED_TIME > 0 --only get queries that actually used compute
         group by 1
-        having count(*) >= 10 --configurable/minimal threshold
+        having count(*) >= 1 --configurable/minimal threshold
         order by 2 desc
         limit {n} --configurable upper bound threshold
         """
@@ -692,20 +696,57 @@ class SNFLKQuery():
         return df
     
     ### User queries ---
-    #Do we want 30 day logins
     def idle_users(self, start_date='2022-01-01',end_date=''):
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
         sql=f"""
-        SELECT *
+        SELECT
+        name
+        ,created_on
+        ,deleted_on
+        ,login_name
+        ,email
+        ,must_change_password
+        ,disabled
+        ,snowflake_lock
+        ,default_role
+        ,last_success_login
+        ,locked_until_time
+        ,password_last_set_time
         FROM {self.dbname}.ACCOUNT_USAGE.USERS 
-        WHERE LAST_SUCCESS_LOGIN < DATEADD(month, -1, CURRENT_TIMESTAMP()) 
-        AND DELETED_ON IS NULL
+        WHERE LAST_SUCCESS_LOGIN not between '{start_date}' and '{end_date}'
+        AND DELETED_ON IS NULL;
+        """
+        df=self.query_to_df(sql)
+        return df
+
+    def users_never_logged_in(self,start_date="2022-02-02", end_date=""):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql=f"""
+        SELECT
+        name
+        ,created_on
+        ,deleted_on
+        ,login_name
+        ,email
+        ,must_change_password
+        ,disabled
+        ,snowflake_lock
+        ,default_role
+        ,last_success_login
+        ,locked_until_time
+        ,password_last_set_time
+        FROM {self.dbname}.ACCOUNT_USAGE.USERS 
+        WHERE LAST_SUCCESS_LOGIN IS NULL
+        AND DELETED_ON IS NULL;
         """
         df=self.query_to_df(sql)
         return df
         
+    
     def users_full_table_scans(self, start_date='2022-01-01',end_date='',n=10):
         if not end_date:
             today_date = date.today()
@@ -724,6 +765,7 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
        
         return df
+
     def heavy_users(self, start_date='2022-01-01',end_date='',n=10):
         if not end_date:
             today_date = date.today()
@@ -740,17 +782,6 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
         return df
     
-    def users_never_logged_in(self,start_date="2022-02-02", end_date=""):
-        if not end_date:
-            today_date = date.today()
-            end_date = str(today_date)
-        sql=f"""
-        SELECT *
-        FROM {self.dbname}.ACCOUNT_USAGE.USERS 
-        WHERE LAST_SUCCESS_LOGIN IS NULL;
-        """
-        df=self.query_to_df(sql)
-        return df
     
     def idle_roles(self,start_date="2022-01-01", end_date=""):
         if not end_date:
