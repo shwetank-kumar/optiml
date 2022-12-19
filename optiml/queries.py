@@ -878,7 +878,55 @@ class SNFLKQuery():
         limit {n};
         """       
         df=self.query_to_df(sql)
+        return df
+
+    def idle_warehouses(self,start_date="2022-01-01", end_date="", no_of_days=-10):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+
+        sql=f"""
+            select NAME, SIZE, RUNNING from {self.dbname}.ACCOUNT_USAGE.WAREHOUSES a
+                left join (select distinct WAREHOUSE_NAME from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY
+                            WHERE START_TIME > dateadd('days', {no_of_days}, current_timestamp())
+                ) b on b.WAREHOUSE_NAME = a.name
+            where b.WAREHOUSE_NAME is null;;
+        """
+        
+        df=self.query_to_df(sql)
         return df 
+
+    def wh_scaled_up_out(self):
+        sql=f"""
+            SELECT QUERY_ID
+            ,USER_NAME
+            ,WAREHOUSE_NAME
+            ,WAREHOUSE_SIZE
+            ,BYTES_SCANNED
+            ,BYTES_SPILLED_TO_REMOTE_STORAGE
+            ,BYTES_SPILLED_TO_REMOTE_STORAGE / BYTES_SCANNED AS SPILLING_READ_RATIO
+            FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY
+            WHERE BYTES_SPILLED_TO_REMOTE_STORAGE > BYTES_SCANNED * 5  -- Each byte read was spilled 5x on average
+            ORDER BY SPILLING_READ_RATIO DESC;
+        """
+        
+        df=self.query_to_df(sql)
+        return df
+        
+    def wh_required_mcw(self):
+        sql=f"""
+            SELECT TO_DATE(START_TIME) as DATE
+            ,WAREHOUSE_NAME
+            ,SUM(AVG_RUNNING) AS SUM_RUNNING
+            ,SUM(AVG_QUEUED_LOAD) AS SUM_QUEUED
+            FROM "SNOWFLAKE"."ACCOUNT_USAGE"."WAREHOUSE_LOAD_HISTORY"
+            WHERE TO_DATE(START_TIME) >= DATEADD(month,-1,CURRENT_TIMESTAMP())
+            GROUP BY 1,2
+            HAVING SUM(AVG_QUEUED_LOAD) >0;
+        """
+        
+        df=self.query_to_df(sql)
+        return df
 
 
 
