@@ -103,9 +103,9 @@ class SNFLKQuery():
         autocluster_df = self.cost_of_autoclustering_ts(start_date, end_date)
 
         df_concat=pd.concat([compute_df,storage_df,cloud_service_df,material_df,replication_df,searchopt_df,snowpipe_df,autocluster_df],0)
-        df_select=df_concat[['user_name','credits','dollars','hourly_start_time','category_name']]
+        # df_select=df_concat[['user_name','credits','dollars','hourly_start_time','category_name']]
 
-        return df_select
+        return df_concat
 
     # @simple_cache
     ##TODO: This can be consolidated with cost_by_wh except this one right now
@@ -500,7 +500,6 @@ class SNFLKQuery():
             GROUP BY 1,2,4
             ORDER BY 3 DESC
             ;
-        
         """
         ## Removing localization on the timestamp so it can bite us in the ass
         ## later
@@ -531,69 +530,71 @@ class SNFLKQuery():
         sql = f"""
         WITH WAREHOUSE_SIZE AS
         (
-             SELECT WAREHOUSE_SIZE, NODES
-               FROM (
-                      SELECT 'XSMALL' AS WAREHOUSE_SIZE, 1 AS NODES
-                      UNION ALL
-                      SELECT 'SMALL' AS WAREHOUSE_SIZE, 2 AS NODES
-                      UNION ALL
-                      SELECT 'MEDIUM' AS WAREHOUSE_SIZE, 4 AS NODES
-                      UNION ALL
-                      SELECT 'LARGE' AS WAREHOUSE_SIZE, 8 AS NODES
-                      UNION ALL
-                      SELECT 'XLARGE' AS WAREHOUSE_SIZE, 16 AS NODES
-                      UNION ALL
-                      SELECT '2XLARGE' AS WAREHOUSE_SIZE, 32 AS NODES
-                      UNION ALL
-                      SELECT '3XLARGE' AS WAREHOUSE_SIZE, 64 AS NODES
-                      UNION ALL
-                      SELECT '4XLARGE' AS WAREHOUSE_SIZE, 128 AS NODES
+            SELECT WAREHOUSE_SIZE, NODES
+            FROM (
+                    SELECT 'XSMALL' AS WAREHOUSE_SIZE, 1 AS NODES
+                    UNION ALL
+                    SELECT 'SMALL' AS WAREHOUSE_SIZE, 2 AS NODES
+                    UNION ALL
+                    SELECT 'MEDIUM' AS WAREHOUSE_SIZE, 4 AS NODES
+                    UNION ALL
+                    SELECT 'LARGE' AS WAREHOUSE_SIZE, 8 AS NODES
+                    UNION ALL
+                    SELECT 'XLARGE' AS WAREHOUSE_SIZE, 16 AS NODES
+                    UNION ALL
+                    SELECT '2XLARGE' AS WAREHOUSE_SIZE, 32 AS NODES
+                    UNION ALL
+                    SELECT '3XLARGE' AS WAREHOUSE_SIZE, 64 AS NODES
+                    UNION ALL
+                    SELECT '4XLARGE' AS WAREHOUSE_SIZE, 128 AS NODES
                     )
         ),
         QUERY_HISTORY AS
         (
-             SELECT QH.QUERY_ID
-                   ,QH.QUERY_TEXT
-                   ,QH.USER_NAME
-                   ,QH.ROLE_NAME
-                   ,QH.EXECUTION_TIME
-                   ,QH.WAREHOUSE_SIZE
-              FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
-             WHERE START_TIME between '{start_date}' and '{end_date}'
+            SELECT QH.QUERY_ID
+                ,QH.QUERY_TEXT
+                ,QH.USER_NAME
+                ,QH.ROLE_NAME
+                ,QH.EXECUTION_TIME
+                ,QH.WAREHOUSE_SIZE
+            FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
+            WHERE START_TIME between '{start_date}' and '{end_date}'
         )
+
         SELECT QH.QUERY_ID
-              ,QH.QUERY_TEXT
-              ,QH.USER_NAME
-              ,QH.ROLE_NAME
-              ,(QH.EXECUTION_TIME/(1000*60)) AS EXECUTION_TIME_MINUTES
-              ,WS.WAREHOUSE_SIZE
-              ,WS.NODES
-              ,WC.CREDITS
-              ,(WC.DOLLARS/QC.QUERY_COUNT) as cost_per_query
-        FROM QUERY_HISTORY QH
+            
+            ,QH.QUERY_TYPE
+            ,QH.QUERY_TEXT
+            ,QH.USER_NAME
+            ,QH.ROLE_NAME
+            ,QH.DATABASE_NAME
+            ,QH.SCHEMA_NAME
+            ,QH.WAREHOUSE_NAME
+            
+            ,WS.WAREHOUSE_SIZE
+            
+            ,QH.BYTES_SPILLED_TO_LOCAL_STORAGE
+            ,QH.BYTES_SPILLED_TO_REMOTE_STORAGE
+            ,QH.PARTITIONS_SCANNED
+            ,QH.PARTITIONS_TOTAL
+            ,ROUND((QH.COMPILATION_TIME/(1000)),2) AS COMPILATION_TIME_SEC
+            ,ROUND((QH.EXECUTION_TIME/(1000*60)),2) AS EXECUTION_TIME_MIN
+            
+            ,ROUND((QH.EXECUTION_TIME/(1000*60*60))*WS.NODES,2) as CREDITS
+            ,QH.CLUSTER_NUMBER
+            ,QH.EXECUTION_STATUS
+            
+
+        FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
         JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
-        JOIN  (
-            SELECT
-               WAREHOUSE_NAME
-              ,COUNT(QUERY_ID) as QUERY_COUNT
-            FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY
-            WHERE TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
-            GROUP BY WAREHOUSE_NAME
-              ) QC
-        JOIN (
-            SELECT
-                WAREHOUSE_NAME
-                ,SUM(CREDITS_USED) as CREDITS
-                ,SUM(CREDITS_USED)*({credit_val}) as DOLLARS
-            FROM {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY
-            WHERE TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
-            GROUP BY WAREHOUSE_NAME
-          ) WC
-        ORDER BY CREDITS DESC LIMIT {n}
+        ORDER BY CREDITS DESC
+        LIMIT {n}
+        ;
         """
         df = self.query_to_df(sql)
         return df
 
+    ##TODO: Update query output columns to be same as expensive queries
     def n_queries_spill_to_storage(self, start_date='2022-01-01', end_date='', n=10):
         """
         Shows queries spilling maximum remote storage
@@ -602,8 +603,9 @@ class SNFLKQuery():
             today_date = date.today()
             end_date = str(today_date)
         sql = f"""
-        select query_text, user_name, role_name, warehouse_name, warehouse_size,
-        BYTES_SPILLED_TO_REMOTE_STORAGE, total_elapsed_time/1000 total_elapsed_time_seconds
+        select query_id, query_text, user_name, role_name, warehouse_name, warehouse_size,
+        BYTES_SPILLED_TO_LOCAL_STORAGE, BYTES_SPILLED_TO_REMOTE_STORAGE,
+        total_elapsed_time/1000/60 execution_time_min
         from   {self.dbname}.account_usage.query_history
         where  BYTES_SPILLED_TO_REMOTE_STORAGE > 0
         and TO_DATE(start_time) between '{start_date}' and '{end_date}'
@@ -613,6 +615,7 @@ class SNFLKQuery():
         df = self.query_to_df(sql)
         return df
     
+    ##TODO: Update query output columns to be same as expensive queries
     def n_queries_scanned_most_data(self, start_date='2022-01-01',end_date='2022-02-02',n=10):
         """
         Shows queries that scan the most data
@@ -626,7 +629,7 @@ class SNFLKQuery():
           
           QUERY_ID
          ,QUERY_TEXT
-         ,TOTAL_ELAPSED_TIME/1000 AS QUERY_EXECUTION_TIME_SECONDS
+         ,TOTAL_ELAPSED_TIME/1000/60 AS EXECUTION_TIME_MIN
          ,PARTITIONS_SCANNED
          ,PARTITIONS_TOTAL
 
@@ -637,68 +640,113 @@ class SNFLKQuery():
             and ERROR_CODE iS NULL
             and PARTITIONS_SCANNED is not null
         
-        
-        
+        order by PARTITIONS_SCANNED desc
         LIMIT {n}
         """
         df=self.query_to_df(sql)
         return df
     
-    def n_most_cached_queries(self, start_date='2022-01-01',end_date=''):
+    ##TODO: Update query output columns to be same as expensive queries
+    def n_most_cached_queries(self, start_date='2022-01-01',end_date='', n=10):
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
         sql=f""" 
         SELECT 
         QUERY_ID
-        
-        
+        ,QUERY_TEXT
         ,BYTES_SCANNED
-        ,BYTES_SCANNED*PERCENTAGE_SCANNED_FROM_CACHE AS BYTES_SCANNED_FROM_CACHE
-        ,BYTES_SCANNED*PERCENTAGE_SCANNED_FROM_CACHE /BYTES_SCANNED AS PERCENT_SCANNED_FROM_CACHE
+        ,PERCENTAGE_SCANNED_FROM_CACHE*100 as percent_scanned_from_cache
         from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY 
         WHERE TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
         AND BYTES_SCANNED > 0
         
-        ORDER BY 4 
+        ORDER BY PERCENTAGE_SCANNED_FROM_CACHE desc
+        LIMIT {n}
         """
        
         
         df=self.query_to_df(sql)
         return df
-    def n_most_executed_queries(self, start_date='2022-01-01',end_date=''):
+    
+    ##TODO: Update query output columns to be same as expensive queries - you cant do query ID since 
+    # you are grouping on counts so everything except that
+    ##TODO: Convert this into N most frequently executed Select queries so these can be identified 
+    # as targets for creating new tables or materialized views
+    def n_most_executed_queries(self, start_date='2022-01-01',end_date='', n=10):
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
         sql=f"""
         SELECT 
         QUERY_TEXT
-        ,count(*) as number_of_queries
+        query_type
+        ,count(*) as number_of_times_executed
         from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY 
         where 1=1
         and TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
         and TOTAL_ELAPSED_TIME > 0 --only get queries that actually used compute
         group by 1
-        having count(*) >= 10 --configurable/minimal threshold
+        having count(*) >= 1 --configurable/minimal threshold
         order by 2 desc
-        limit 100 --configurable upper bound threshold
+        limit {n} --configurable upper bound threshold
         """
 
         df=self.query_to_df(sql)
         return df
-        #Do we want 30 day logins
+    
+    ### User queries ---
     def idle_users(self, start_date='2022-01-01',end_date=''):
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
         sql=f"""
-        SELECT *
+        SELECT
+        name
+        ,created_on
+        ,deleted_on
+        ,login_name
+        ,email
+        ,must_change_password
+        ,disabled
+        ,snowflake_lock
+        ,default_role
+        ,last_success_login
+        ,locked_until_time
+        ,password_last_set_time
         FROM {self.dbname}.ACCOUNT_USAGE.USERS 
-        WHERE LAST_SUCCESS_LOGIN < DATEADD(month, -1, CURRENT_TIMESTAMP()) 
-        AND DELETED_ON IS NULL
+        WHERE LAST_SUCCESS_LOGIN not between '{start_date}' and '{end_date}'
+        AND DELETED_ON IS NULL;
         """
         df=self.query_to_df(sql)
         return df
+
+    def users_never_logged_in(self,start_date="2022-02-02", end_date=""):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql=f"""
+        SELECT
+        name
+        ,created_on
+        ,deleted_on
+        ,login_name
+        ,email
+        ,must_change_password
+        ,disabled
+        ,snowflake_lock
+        ,default_role
+        ,last_success_login
+        ,locked_until_time
+        ,password_last_set_time
+        FROM {self.dbname}.ACCOUNT_USAGE.USERS 
+        WHERE LAST_SUCCESS_LOGIN IS NULL
+        AND DELETED_ON IS NULL;
+        """
+        df=self.query_to_df(sql)
+        return df
+        
+    
     def users_full_table_scans(self, start_date='2022-01-01',end_date='',n=10):
         if not end_date:
             today_date = date.today()
@@ -717,6 +765,7 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
        
         return df
+
     def heavy_users(self, start_date='2022-01-01',end_date='',n=10):
         if not end_date:
             today_date = date.today()
@@ -732,17 +781,8 @@ class SNFLKQuery():
         order by 3 desc"""
         df=self.query_to_df(sql)
         return df
-    def users_never_logged_in(self,start_date="2022-02-02", end_date=""):
-        if not end_date:
-            today_date = date.today()
-            end_date = str(today_date)
-        sql=f"""
-        SELECT *
-        FROM {self.dbname}.ACCOUNT_USAGE.USERS 
-        WHERE LAST_SUCCESS_LOGIN IS NULL;
-        """
-        df=self.query_to_df(sql)
-        return df
+    
+    
     def idle_roles(self,start_date="2022-01-01", end_date=""):
         if not end_date:
             today_date = date.today()
@@ -764,6 +804,7 @@ class SNFLKQuery():
         """
         df=self.query_to_df(sql)
         return df
+    
     def failed_tasks(self,start_date="2022-01-01", end_date=""):
         if not end_date:
             today_date = date.today()
@@ -778,6 +819,7 @@ class SNFLKQuery():
         """
         df=self.query_to_df(sql)
         return df
+    
     def long_running_tasks(self,start_date="2022-01-01", end_date=""):
         if not end_date:
             today_date = date.today()
@@ -792,6 +834,7 @@ class SNFLKQuery():
         """
         df=self.query_to_df(sql)
         return df
+    
     # They will show up if they have been accessed
     def table_accessed(self,start_date="2022-01-01", end_date=""):
         if not end_date:
@@ -809,6 +852,7 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
         return df
 
+        
     def top_users(self, start_date="2022-01-01", end_date="",n=10):
         if not end_date:
             today_date = date.today()
