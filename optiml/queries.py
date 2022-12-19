@@ -562,29 +562,24 @@ class SNFLKQuery():
         )
 
         SELECT QH.QUERY_ID
-            
             ,QH.QUERY_TYPE
             ,QH.QUERY_TEXT
             ,QH.USER_NAME
+            ,WS.NODES
             ,QH.ROLE_NAME
             ,QH.DATABASE_NAME
             ,QH.SCHEMA_NAME
             ,QH.WAREHOUSE_NAME
-            
             ,WS.WAREHOUSE_SIZE
-            
             ,QH.BYTES_SPILLED_TO_LOCAL_STORAGE
             ,QH.BYTES_SPILLED_TO_REMOTE_STORAGE
             ,QH.PARTITIONS_SCANNED
             ,QH.PARTITIONS_TOTAL
             ,ROUND((QH.COMPILATION_TIME/(1000)),2) AS COMPILATION_TIME_SEC
             ,ROUND((QH.EXECUTION_TIME/(1000*60)),2) AS EXECUTION_TIME_MIN
-            
             ,ROUND((QH.EXECUTION_TIME/(1000*60*60))*WS.NODES,2) as CREDITS
             ,QH.CLUSTER_NUMBER
             ,QH.EXECUTION_STATUS
-            
-
         FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
         JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
         ORDER BY CREDITS DESC
@@ -603,10 +598,29 @@ class SNFLKQuery():
             today_date = date.today()
             end_date = str(today_date)
         sql = f"""
-        select query_id, query_text, user_name, role_name, warehouse_name, warehouse_size,
-        BYTES_SPILLED_TO_LOCAL_STORAGE, BYTES_SPILLED_TO_REMOTE_STORAGE,
-        total_elapsed_time/1000/60 execution_time_min
-        from   {self.dbname}.account_usage.query_history
+        
+
+        SELECT QH.QUERY_ID
+            ,QH.QUERY_TYPE
+            ,QH.QUERY_TEXT
+            ,QH.USER_NAME
+            ,QH.ROLE_NAME
+            ,QH.DATABASE_NAME
+            ,QH.SCHEMA_NAME
+            ,QH.WAREHOUSE_NAME
+            ,QH.WAREHOUSE_SIZE
+            ,QH.BYTES_SPILLED_TO_LOCAL_STORAGE
+            ,QH.BYTES_SPILLED_TO_REMOTE_STORAGE
+            ,QH.PARTITIONS_SCANNED
+            ,QH.PARTITIONS_TOTAL
+            ,ROUND((QH.COMPILATION_TIME/(1000)),2) AS COMPILATION_TIME_SEC
+            ,ROUND((QH.EXECUTION_TIME/(1000*60)),2) AS EXECUTION_TIME_MIN
+            ,QH.CLUSTER_NUMBER
+            ,QH.EXECUTION_STATUS
+        
+        
+        from   {self.dbname}.account_usage.query_history QH
+        
         where  BYTES_SPILLED_TO_REMOTE_STORAGE > 0
         and TO_DATE(start_time) between '{start_date}' and '{end_date}'
         order  by BYTES_SPILLED_TO_REMOTE_STORAGE desc
@@ -625,15 +639,28 @@ class SNFLKQuery():
             today_date = date.today()
             end_date = str(today_date)
         sql= f"""
-        select
-          
-          QUERY_ID
-         ,QUERY_TEXT
-         ,TOTAL_ELAPSED_TIME/1000/60 AS EXECUTION_TIME_MIN
-         ,PARTITIONS_SCANNED
-         ,PARTITIONS_TOTAL
 
-        from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY 
+        SELECT QH.QUERY_ID
+            ,QH.QUERY_TYPE
+            ,QH.QUERY_TEXT
+            ,QH.USER_NAME
+            ,QH.ROLE_NAME
+            ,QH.DATABASE_NAME
+            ,QH.SCHEMA_NAME
+            ,QH.WAREHOUSE_NAME
+            ,QH.WAREHOUSE_SIZE
+            ,QH.BYTES_SPILLED_TO_LOCAL_STORAGE
+            ,QH.BYTES_SPILLED_TO_REMOTE_STORAGE
+            ,QH.PARTITIONS_SCANNED
+            ,QH.PARTITIONS_TOTAL
+            ,ROUND((QH.COMPILATION_TIME/(1000)),2) AS COMPILATION_TIME_SEC
+            ,ROUND((QH.EXECUTION_TIME/(1000*60)),2) AS EXECUTION_TIME_MIN
+            ,QH.CLUSTER_NUMBER
+            ,QH.EXECUTION_STATUS
+        
+
+        from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
+        
         where 1=1
         and TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
             and TOTAL_ELAPSED_TIME > 0 --only get queries that actually used compute
@@ -652,17 +679,31 @@ class SNFLKQuery():
             today_date = date.today()
             end_date = str(today_date)
         sql=f""" 
-        SELECT 
-        QUERY_ID
-        ,QUERY_TEXT
-        ,BYTES_SCANNED
-        ,PERCENTAGE_SCANNED_FROM_CACHE*100 as percent_scanned_from_cache
-        from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY 
+        SELECT QH.QUERY_ID
+            ,QH.QUERY_TYPE
+            ,QH.QUERY_TEXT
+            ,QH.USER_NAME
+            ,QH.ROLE_NAME
+            ,QH.DATABASE_NAME
+            ,QH.SCHEMA_NAME
+            ,QH.WAREHOUSE_NAME
+            ,QH.WAREHOUSE_SIZE
+            ,QH.BYTES_SPILLED_TO_LOCAL_STORAGE
+            ,QH.BYTES_SPILLED_TO_REMOTE_STORAGE
+            ,QH.PARTITIONS_SCANNED
+            ,QH.PARTITIONS_TOTAL
+            ,ROUND((QH.COMPILATION_TIME/(1000)),2) AS COMPILATION_TIME_SEC
+            ,ROUND((QH.EXECUTION_TIME/(1000*60)),2) AS EXECUTION_TIME_MIN
+            ,QH.CLUSTER_NUMBER
+            ,QH.EXECUTION_STATUS
+            ,BYTES_SCANNED
+            ,PERCENTAGE_SCANNED_FROM_CACHE*100 as percent_scanned_from_cache
+        from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
         WHERE TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
         AND BYTES_SCANNED > 0
-        
-        ORDER BY PERCENTAGE_SCANNED_FROM_CACHE desc
+        ORDER BY PERCENT_SCANNED_FROM_CACHE DESC
         LIMIT {n}
+       
         """
        
         
@@ -673,6 +714,7 @@ class SNFLKQuery():
     # you are grouping on counts so everything except that
     ##TODO: Convert this into N most frequently executed Select queries so these can be identified 
     # as targets for creating new tables or materialized views
+    
     def n_most_executed_queries(self, start_date='2022-01-01',end_date='', n=10):
         if not end_date:
             today_date = date.today()
@@ -680,7 +722,7 @@ class SNFLKQuery():
         sql=f"""
         SELECT 
         QUERY_TEXT
-        query_type
+        ,query_type
         ,count(*) as number_of_times_executed
         from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY 
         where 1=1
