@@ -748,6 +748,7 @@ class SNFLKQuery():
         return df
     
     ### User queries ---
+    
     def idle_users(self, start_date='2022-01-01',end_date=''):
         if not end_date:
             today_date = date.today()
@@ -768,7 +769,8 @@ class SNFLKQuery():
         ,password_last_set_time
         FROM {self.dbname}.ACCOUNT_USAGE.USERS 
         WHERE LAST_SUCCESS_LOGIN not between '{start_date}' and '{end_date}'
-        AND DELETED_ON IS NULL;
+        AND DELETED_ON IS NULL
+        ORDER BY LAST_SUCCESS_LOGIN ASC
         """
         df=self.query_to_df(sql)
         return df
@@ -843,12 +845,12 @@ class SNFLKQuery():
         sql=f"""
         SELECT 
         R.*
-        FROM SNOWFLAKE.ACCOUNT_USAGE.ROLES R
+        FROM {self.dbname}.ACCOUNT_USAGE.ROLES R
         LEFT JOIN (
             SELECT DISTINCT 
                 ROLE_NAME 
             FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY 
-            WHERE START_TIME > DATEADD(month,-1,CURRENT_TIMESTAMP())
+            WHERE START_TIME between '{start_date}' and '{end_date}'
                 ) Q 
                         ON Q.ROLE_NAME = R.NAME
         WHERE Q.ROLE_NAME IS NULL
