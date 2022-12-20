@@ -723,7 +723,7 @@ class SNFLKQuery():
         SELECT 
         QUERY_TEXT
         ,QUERY_TYPE
-        ,count(*) as number_of_queries
+        ,count(*) as number_of_times_executed
         ,sum(BYTES_SPILLED_TO_LOCAL_STORAGE)
         ,sum(BYTES_SPILLED_TO_REMOTE_STORAGE)
         ,sum(TOTAL_ELAPSED_TIME)/1000 as execution_seconds
