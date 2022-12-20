@@ -715,23 +715,33 @@ class SNFLKQuery():
     ##TODO: Convert this into N most frequently executed Select queries so these can be identified 
     # as targets for creating new tables or materialized views
     
-    def n_most_executed_queries(self, start_date='2022-01-01',end_date='', n=10):
+    def n_most_executed_select_queries(self, start_date='2022-01-01',end_date='', n=10):
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
         sql=f"""
         SELECT 
         QUERY_TEXT
-        ,query_type
-        ,count(*) as number_of_times_executed
-        from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY 
+        ,QUERY_TYPE
+        ,count(*) as number_of_queries
+        ,sum(BYTES_SPILLED_TO_LOCAL_STORAGE)
+        ,sum(BYTES_SPILLED_TO_REMOTE_STORAGE)
+        ,sum(TOTAL_ELAPSED_TIME)/1000 as execution_seconds
+        ,sum(TOTAL_ELAPSED_TIME)/(1000*60) as execution_minutes
+        ,sum(TOTAL_ELAPSED_TIME)/(1000*60*60) as execution_hours
+        ,sum(PARTITIONS_SCANNED)
+        ,sum(PARTITIONS_TOTAL)
+        ,max(cluster_number)
+        from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY Q
         where 1=1
-        and TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
+        and QUERY_TYPE='SELECT'
+        and TO_DATE(Q.START_TIME) between '{start_date}' and '{end_date}'
         and TOTAL_ELAPSED_TIME > 0 --only get queries that actually used compute
-        group by 1
-        having count(*) >= 1 --configurable/minimal threshold
-        order by 2 desc
-        limit {n} --configurable upper bound threshold
+        group by 1,2
+        having count(*) >= 10 --configurable/minimal threshold
+        order by 3 desc
+        limit 100 --configurable upper bound threshold
+        ;
         """
 
         df=self.query_to_df(sql)
