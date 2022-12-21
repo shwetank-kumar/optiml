@@ -907,32 +907,7 @@ class SNFLKQuery():
         return df
 
         
-    def top_users(self, start_date="2022-01-01", end_date="",n=10):
-        if not end_date:
-            today_date = date.today()
-            end_date = str(today_date)
-        sql=f"""
-        select user_name, count(*)
-            ,sum(total_elapsed_time/1000 * 
-            case warehouse_size
-            when 'X-Small' then 1/60/60
-            when 'Small'   then 2/60/60
-            when 'Medium'  then 4/60/60
-            when 'Large'   then 8/60/60
-            when 'X-Large' then 16/60/60
-            when '2X-Large' then 32/60/60
-            when '3X-Large' then 64/60/60
-            when '4X-Large' then 128/60/60
-            else 0
-            end) as estimated_credits
-        from {self.dbname}.account_usage.query_history
-        WHERE TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
-        group by user_name
-        order by 3 desc
-        limit {n};
-        """       
-        df=self.query_to_df(sql)
-        return df 
+ 
 
 
 
