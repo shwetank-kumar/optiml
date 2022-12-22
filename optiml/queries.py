@@ -432,7 +432,7 @@ class SNFLKQuery():
         df = df.set_index('start_time').resample('1H').ffill()
         df['dollars'] = df['dollars']/24.
         df.reset_index(inplace=True)
-        df.insert(1, "end_time", df["start_time"] + pd.offsets.Hour(1))
+        df.rename(columns = {'start_time':'hourly_start_time'}, inplace = True)
         return df
 
     def cost_by_partner_tool_ts(self, start_date='2022-01-01', end_date=''):
