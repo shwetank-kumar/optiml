@@ -746,7 +746,55 @@ class SNFLKQuery():
 
         df=self.query_to_df(sql)
         return df
-    
+
+    def longest_running_queries(self, start_date='2022-01-01',end_date='', n=10):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql=f"""
+        select
+          
+          QUERY_ID
+         --reconfigure the url if your account is not in AWS US-West
+         
+         ,ROW_NUMBER() OVER(ORDER BY PARTITIONS_SCANNED DESC) as QUERY_ID_INT
+         ,QUERY_TEXT
+         ,TOTAL_ELAPSED_TIME/1000 AS QUERY_EXECUTION_TIME_SECONDS
+         ,PARTITIONS_SCANNED
+         ,PARTITIONS_TOTAL
+
+        from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY Q
+        where 1=1
+        and TO_DATE(Q.START_TIME) between '{start_date}' and '{end_date}'
+            and TOTAL_ELAPSED_TIME > 0 --only get queries that actually used compute
+            and ERROR_CODE iS NULL
+            and PARTITIONS_SCANNED is not null
+        
+        order by  TOTAL_ELAPSED_TIME desc
+        
+        LIMIT 50
+        """
+
+        df=self.query_to_df(sql)
+        return df
+    # Same results as executed_queries
+
+    # def most_executed_using_hash(self, start_date='2022-01-01',end_date=''):
+    #     if not end_date:
+    #         today_date = date.today()
+    #         end_date = str(today_date)
+    #     sql=f"""
+    #     select hash(query_text), query_text, count(*), avg(compilation_time), avg(execution_time)
+    #     from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY
+    #     WHERE TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
+    #     group by hash(query_text), query_text
+    #     order by count(*) desc"""
+        
+    #     df=self.query_to_df(sql)
+    #     return df
+
+  
+   
     ### User queries ---
     
     def idle_users(self, start_date='2022-01-01',end_date=''):
