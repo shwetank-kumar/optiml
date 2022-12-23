@@ -932,7 +932,7 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
         return df 
 
-    def idle_warehouses(self,start_date="2022-01-01", end_date="", no_of_days=-10):
+    def idle_warehouses(self,start_date="2022-01-01", end_date=""):
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -948,7 +948,10 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
         return df 
 
-    def wh_scaled_up_out(self):
+    # start date and end date
+    # Check the query spillage function
+    # Byte spillage function - Revisit
+    def wh_scaled_up_out(self,start_date="2022-01-01", end_date=""):
         sql=f"""
             SELECT QUERY_ID
             ,USER_NAME
