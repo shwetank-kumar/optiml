@@ -723,7 +723,7 @@ class SNFLKQuery():
         SELECT 
         QUERY_TEXT
         ,QUERY_TYPE
-        ,count(*) as number_of_times_executed
+        ,count(*) as number_of_queries
         ,sum(BYTES_SPILLED_TO_LOCAL_STORAGE)
         ,sum(BYTES_SPILLED_TO_REMOTE_STORAGE)
         ,sum(TOTAL_ELAPSED_TIME)/1000 as execution_seconds
@@ -740,10 +740,9 @@ class SNFLKQuery():
         group by 1,2
         having count(*) >= 10 --configurable/minimal threshold
         order by 3 desc
-        limit 100 --configurable upper bound threshold
+        limit {n} --configurable upper bound threshold
         ;
-        """
-
+      """
         df=self.query_to_df(sql)
         return df
 
@@ -752,27 +751,34 @@ class SNFLKQuery():
             today_date = date.today()
             end_date = str(today_date)
         sql=f"""
-        select
-          
-          QUERY_ID
-         --reconfigure the url if your account is not in AWS US-West
-         
-         ,ROW_NUMBER() OVER(ORDER BY PARTITIONS_SCANNED DESC) as QUERY_ID_INT
-         ,QUERY_TEXT
-         ,TOTAL_ELAPSED_TIME/1000 AS QUERY_EXECUTION_TIME_SECONDS
-         ,PARTITIONS_SCANNED
-         ,PARTITIONS_TOTAL
+           SELECT QH.QUERY_ID
+            ,QH.QUERY_TYPE
+            ,QH.QUERY_TEXT
+            ,QH.USER_NAME
+            ,QH.ROLE_NAME
+            ,QH.DATABASE_NAME
+            ,QH.SCHEMA_NAME
+            ,QH.WAREHOUSE_NAME
+            ,QH.WAREHOUSE_SIZE
+            ,QH.BYTES_SPILLED_TO_LOCAL_STORAGE
+            ,QH.BYTES_SPILLED_TO_REMOTE_STORAGE
+            ,QH.PARTITIONS_SCANNED
+            ,QH.PARTITIONS_TOTAL
+            ,ROUND((QH.COMPILATION_TIME/(1000)),2) AS COMPILATION_TIME_SEC
+            ,ROUND((QH.EXECUTION_TIME/(1000*60)),2) AS EXECUTION_TIME_MIN
+            ,QH.CLUSTER_NUMBER
+            ,QH.EXECUTION_STATUS
 
-        from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY Q
+        from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
         where 1=1
-        and TO_DATE(Q.START_TIME) between '{start_date}' and '{end_date}'
+        and TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
             and TOTAL_ELAPSED_TIME > 0 --only get queries that actually used compute
             and ERROR_CODE iS NULL
             and PARTITIONS_SCANNED is not null
         
         order by  TOTAL_ELAPSED_TIME desc
         
-        LIMIT 50
+        LIMIT {n}
         """
 
         df=self.query_to_df(sql)
@@ -829,7 +835,7 @@ class SNFLKQuery():
             end_date = str(today_date)
         sql=f"""
         SELECT
-        name
+        nameprint(df.iloc[3]["query_text"])
         ,created_on
         ,deleted_on
         ,login_name
