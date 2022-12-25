@@ -113,6 +113,7 @@ class SNFLKQuery():
     def cost_by_wh_ts(self, start_date='2022-01-01', end_date=''):
         """
         Returns results only for ACCOUNTADMIN role or any other role that has been granted MONITOR USAGE global privilege
+        https://docs.snowflake.com/en/sql-reference/functions/warehouse_metering_history.html
         Calculates the total cost of compute and cloud services in a time
         series according to warehouse for a given time period using Warehouse
         Metering History table.
