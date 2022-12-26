@@ -938,12 +938,20 @@ class SNFLKQuery():
             end_date = str(today_date)
 
         sql=f"""
-            select name, created_on, resumed_on, state, size, running from {self.dbname}.ACCOUNT_USAGE.WAREHOUSES a
-                left join (select distinct WAREHOUSE_NAME from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY
-                            WHERE START_TIME > '{start_date}' and START_TIME < '{end_date }'
-                ) b on b.WAREHOUSE_NAME = a.name
-            where b.WAREHOUSE_NAME is null;;
+            select name, created_on, resumed_on, state, size, running, date_trunc('month', START_TIME) as date_month  
+            from {self.dbname}.ACCOUNT_USAGE.WAREHOUSES a
+                left join {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY b on (b.WAREHOUSE_NAME = a.name 
+                                                                                    and b.WAREHOUSE_NAME is null
+                                                                                    and b.START_TIME between '{start_date}' and '{end_date }')
+            union
+            select name, created_on, resumed_on, state, size, running, date_trunc('month', START_TIME) as date_month  
+            from {self.dbname}.ACCOUNT_USAGE.WAREHOUSES a
+                left join {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY b on (b.WAREHOUSE_NAME = a.name 
+                                                                                    and b.WAREHOUSE_NAME is not null
+                                                                                    and b.START_TIME between '{start_date}' and '{end_date }')
+            ;
         """
+        print(sql)
         
         df=self.query_to_df(sql)
         return df 
@@ -951,19 +959,27 @@ class SNFLKQuery():
     # start date and end date
     # Check the query spillage function
     # Byte spillage function - Revisit
-    def wh_scaled_up_out(self,start_date="2022-01-01", end_date=""):
+    def wh_scaled_up_out(self,start_date="2022-01-01", end_date="", byte_spilled_average = 5):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+
         sql=f"""
             SELECT QUERY_ID
             ,USER_NAME
+            ,date_trunc('month', START_TIME) as date_month
             ,WAREHOUSE_NAME
             ,WAREHOUSE_SIZE
             ,BYTES_SCANNED
             ,BYTES_SPILLED_TO_REMOTE_STORAGE
             ,BYTES_SPILLED_TO_REMOTE_STORAGE / BYTES_SCANNED AS SPILLING_READ_RATIO
             FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY
-            WHERE BYTES_SPILLED_TO_REMOTE_STORAGE > BYTES_SCANNED * 5  -- Each byte read was spilled 5x on average
+            WHERE BYTES_SPILLED_TO_REMOTE_STORAGE > BYTES_SCANNED * {byte_spilled_average}  -- Each byte read was spilled 5x on average
+            and start_time >= '{start_date}' and start_time < '{end_date}'
             ORDER BY SPILLING_READ_RATIO DESC;
         """
+
+        # print(sql)
         
         df=self.query_to_df(sql)
         return df
