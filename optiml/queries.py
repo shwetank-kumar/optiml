@@ -938,20 +938,20 @@ class SNFLKQuery():
             end_date = str(today_date)
 
         sql=f"""
-            select name, created_on, resumed_on, state, size, running, date_trunc('month', START_TIME) as date_month  
+            select name, created_on, resumed_on, state, size, running, date_trunc('month', START_TIME)::date as date_month  
             from {self.dbname}.ACCOUNT_USAGE.WAREHOUSES a
                 left join {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY b on (b.WAREHOUSE_NAME = a.name 
                                                                                     and b.WAREHOUSE_NAME is null
                                                                                     and b.START_TIME between '{start_date}' and '{end_date }')
             union
-            select name, created_on, resumed_on, state, size, running, date_trunc('month', START_TIME) as date_month  
+            select name, created_on, resumed_on, state, size, running, date_trunc('month', START_TIME)::date as date_month  
             from {self.dbname}.ACCOUNT_USAGE.WAREHOUSES a
                 left join {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY b on (b.WAREHOUSE_NAME = a.name 
                                                                                     and b.WAREHOUSE_NAME is not null
                                                                                     and b.START_TIME between '{start_date}' and '{end_date }')
-            ;
+            order by 7, name;
         """
-        print(sql)
+        # print(sql)
         
         df=self.query_to_df(sql)
         return df 
