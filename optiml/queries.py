@@ -570,6 +570,11 @@ class SNFLKQuery():
             ,QH.ROLE_NAME
             ,QH.DATABASE_NAME
             ,QH.SCHEMA_NAME
+            ,QH.START_TIME
+            ,QH.END_TIME
+            ,QH.BYTES_SCANNED
+            ,QH.PERCENTAGE_SCANNED_FROM_CACHE
+            ,QH.QUEUED_OVERLOAD_TIME
             ,QH.WAREHOUSE_NAME
             ,WS.WAREHOUSE_SIZE
             ,QH.BYTES_SPILLED_TO_LOCAL_STORAGE
@@ -608,6 +613,7 @@ class SNFLKQuery():
             ,QH.ROLE_NAME
             ,QH.DATABASE_NAME
             ,QH.SCHEMA_NAME
+            ,QH.BYTES_SCANNED
             ,QH.WAREHOUSE_NAME
             ,QH.WAREHOUSE_SIZE
             ,QH.BYTES_SPILLED_TO_LOCAL_STORAGE
@@ -725,13 +731,13 @@ class SNFLKQuery():
         QUERY_TEXT
         ,QUERY_TYPE
         ,count(*) as number_of_queries
-        ,sum(BYTES_SPILLED_TO_LOCAL_STORAGE)
-        ,sum(BYTES_SPILLED_TO_REMOTE_STORAGE)
+        ,sum(BYTES_SPILLED_TO_LOCAL_STORAGE) as BYTES_SPILLED_TO_LOCAL_STORAGE
+        ,sum(BYTES_SPILLED_TO_REMOTE_STORAGE) as BYTES_SPILLED_TO_REMOTE_STORAGE
         ,sum(TOTAL_ELAPSED_TIME)/1000 as execution_seconds
         ,sum(TOTAL_ELAPSED_TIME)/(1000*60) as execution_minutes
         ,sum(TOTAL_ELAPSED_TIME)/(1000*60*60) as execution_hours
-        ,sum(PARTITIONS_SCANNED)
-        ,sum(PARTITIONS_TOTAL)
+        ,sum(PARTITIONS_SCANNED) as PARTITIONS_SCANNED
+        ,sum(PARTITIONS_TOTAL) as PARTITIONS_TOTAL
         ,max(cluster_number)
         from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY Q
         where 1=1
@@ -784,6 +790,27 @@ class SNFLKQuery():
 
         df=self.query_to_df(sql)
         return df
+
+    def caching_warehouse(self, start_date='2022-01-01',end_date='', n=10):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql=f"""
+        SELECT WAREHOUSE_NAME
+        ,COUNT(*) AS QUERY_COUNT
+        ,SUM(BYTES_SCANNED) AS BYTES_SCANNED
+        ,SUM(BYTES_SCANNED*PERCENTAGE_SCANNED_FROM_CACHE) AS BYTES_SCANNED_FROM_CACHE
+        ,SUM(BYTES_SCANNED*PERCENTAGE_SCANNED_FROM_CACHE) / SUM(BYTES_SCANNED) AS PERCENT_SCANNED_FROM_CACHE
+        FROM "{self.dbname}"."ACCOUNT_USAGE"."QUERY_HISTORY"
+        WHERE START_TIME between '{start_date}' and '{end_date}'
+        AND BYTES_SCANNED > 0
+        GROUP BY 1
+        ORDER BY 5
+        ;
+        """
+        df=self.query_to_df(sql)
+        return df
+
     # Same results as executed_queries
 
     # def most_executed_using_hash(self, start_date='2022-01-01',end_date=''):
