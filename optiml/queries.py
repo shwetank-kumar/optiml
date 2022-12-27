@@ -634,6 +634,29 @@ class SNFLKQuery():
         sql = f"""
         
 
+        WITH WAREHOUSE_SIZE AS
+        (
+            SELECT WAREHOUSE_SIZE, NODES
+            FROM (
+                    SELECT 'X-SMALL' AS WAREHOUSE_SIZE, 1 AS NODES
+                    UNION ALL
+                    SELECT 'SMALL' AS WAREHOUSE_SIZE, 2 AS NODES
+                    UNION ALL
+                    SELECT 'MEDIUM' AS WAREHOUSE_SIZE, 4 AS NODES
+                    UNION ALL
+                    SELECT 'LARGE' AS WAREHOUSE_SIZE, 8 AS NODES
+                    UNION ALL
+                    SELECT 'XLARGE' AS WAREHOUSE_SIZE, 16 AS NODES
+                    UNION ALL
+                    SELECT '2XLARGE' AS WAREHOUSE_SIZE, 32 AS NODES
+                    UNION ALL
+                    SELECT '3XLARGE' AS WAREHOUSE_SIZE, 64 AS NODES
+                    UNION ALL
+                    SELECT '4XLARGE' AS WAREHOUSE_SIZE, 128 AS NODES
+                    )
+        )
+       
+
         SELECT QH.QUERY_ID
             ,QH.QUERY_TYPE
             ,QH.QUERY_TEXT
@@ -641,7 +664,6 @@ class SNFLKQuery():
             ,QH.ROLE_NAME
             ,QH.DATABASE_NAME
             ,QH.SCHEMA_NAME
-            ,QH.BYTES_SCANNED
             ,QH.WAREHOUSE_NAME
             ,QH.WAREHOUSE_SIZE
             ,QH.BYTES_SPILLED_TO_LOCAL_STORAGE
@@ -650,14 +672,16 @@ class SNFLKQuery():
             ,QH.PARTITIONS_TOTAL
             ,ROUND((QH.COMPILATION_TIME/(1000)),2) AS COMPILATION_TIME_SEC
             ,ROUND((QH.EXECUTION_TIME/(1000*60)),2) AS EXECUTION_TIME_MIN
+            ,ROUND((QH.EXECUTION_TIME/(1000*60*60))*WS.NODES,2) as CREDITS
             ,QH.CLUSTER_NUMBER
             ,QH.EXECUTION_STATUS
-        
-        
-        from   {self.dbname}.account_usage.query_history QH
+        from  {self.dbname}.account_usage.query_history QH
+        JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
+       
         
         where  BYTES_SPILLED_TO_REMOTE_STORAGE > 0
         and TO_DATE(start_time) between '{start_date}' and '{end_date}'
+        
         order  by BYTES_SPILLED_TO_REMOTE_STORAGE desc
         limit {n};
         """
@@ -674,6 +698,27 @@ class SNFLKQuery():
             today_date = date.today()
             end_date = str(today_date)
         sql= f"""
+        WITH WAREHOUSE_SIZE AS
+        (
+            SELECT WAREHOUSE_SIZE, NODES
+            FROM (
+                    SELECT 'X-SMALL' AS WAREHOUSE_SIZE, 1 AS NODES
+                    UNION ALL
+                    SELECT 'SMALL' AS WAREHOUSE_SIZE, 2 AS NODES
+                    UNION ALL
+                    SELECT 'MEDIUM' AS WAREHOUSE_SIZE, 4 AS NODES
+                    UNION ALL
+                    SELECT 'LARGE' AS WAREHOUSE_SIZE, 8 AS NODES
+                    UNION ALL
+                    SELECT 'XLARGE' AS WAREHOUSE_SIZE, 16 AS NODES
+                    UNION ALL
+                    SELECT '2XLARGE' AS WAREHOUSE_SIZE, 32 AS NODES
+                    UNION ALL
+                    SELECT '3XLARGE' AS WAREHOUSE_SIZE, 64 AS NODES
+                    UNION ALL
+                    SELECT '4XLARGE' AS WAREHOUSE_SIZE, 128 AS NODES
+                    )
+        )
 
         SELECT QH.QUERY_ID
             ,QH.QUERY_TYPE
@@ -690,12 +735,13 @@ class SNFLKQuery():
             ,QH.PARTITIONS_TOTAL
             ,ROUND((QH.COMPILATION_TIME/(1000)),2) AS COMPILATION_TIME_SEC
             ,ROUND((QH.EXECUTION_TIME/(1000*60)),2) AS EXECUTION_TIME_MIN
+            ,ROUND((QH.EXECUTION_TIME/(1000*60*60))*WS.NODES,2) as CREDITS
             ,QH.CLUSTER_NUMBER
             ,QH.EXECUTION_STATUS
         
 
         from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
-        
+        JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
         where 1=1
         and TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
             and TOTAL_ELAPSED_TIME > 0 --only get queries that actually used compute
@@ -714,6 +760,28 @@ class SNFLKQuery():
             today_date = date.today()
             end_date = str(today_date)
         sql=f""" 
+        WITH WAREHOUSE_SIZE AS
+        (
+            SELECT WAREHOUSE_SIZE, NODES
+            FROM (
+                    SELECT 'X-SMALL' AS WAREHOUSE_SIZE, 1 AS NODES
+                    UNION ALL
+                    SELECT 'SMALL' AS WAREHOUSE_SIZE, 2 AS NODES
+                    UNION ALL
+                    SELECT 'MEDIUM' AS WAREHOUSE_SIZE, 4 AS NODES
+                    UNION ALL
+                    SELECT 'LARGE' AS WAREHOUSE_SIZE, 8 AS NODES
+                    UNION ALL
+                    SELECT 'XLARGE' AS WAREHOUSE_SIZE, 16 AS NODES
+                    UNION ALL
+                    SELECT '2XLARGE' AS WAREHOUSE_SIZE, 32 AS NODES
+                    UNION ALL
+                    SELECT '3XLARGE' AS WAREHOUSE_SIZE, 64 AS NODES
+                    UNION ALL
+                    SELECT '4XLARGE' AS WAREHOUSE_SIZE, 128 AS NODES
+                    )
+        )
+
         SELECT QH.QUERY_ID
             ,QH.QUERY_TYPE
             ,QH.QUERY_TEXT
@@ -729,11 +797,13 @@ class SNFLKQuery():
             ,QH.PARTITIONS_TOTAL
             ,ROUND((QH.COMPILATION_TIME/(1000)),2) AS COMPILATION_TIME_SEC
             ,ROUND((QH.EXECUTION_TIME/(1000*60)),2) AS EXECUTION_TIME_MIN
+            ,ROUND((QH.EXECUTION_TIME/(1000*60*60))*WS.NODES,2) as CREDITS
             ,QH.CLUSTER_NUMBER
             ,QH.EXECUTION_STATUS
             ,BYTES_SCANNED
             ,PERCENTAGE_SCANNED_FROM_CACHE*100 as percent_scanned_from_cache
         from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
+        JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
         WHERE TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
         AND BYTES_SCANNED > 0
         ORDER BY PERCENT_SCANNED_FROM_CACHE DESC
@@ -755,6 +825,7 @@ class SNFLKQuery():
             today_date = date.today()
             end_date = str(today_date)
         sql=f"""
+    
         SELECT 
         QUERY_TEXT
         ,QUERY_TYPE
@@ -786,6 +857,27 @@ class SNFLKQuery():
             today_date = date.today()
             end_date = str(today_date)
         sql=f"""
+        WITH WAREHOUSE_SIZE AS
+        (
+            SELECT WAREHOUSE_SIZE, NODES
+            FROM (
+                    SELECT 'X-SMALL' AS WAREHOUSE_SIZE, 1 AS NODES
+                    UNION ALL
+                    SELECT 'SMALL' AS WAREHOUSE_SIZE, 2 AS NODES
+                    UNION ALL
+                    SELECT 'MEDIUM' AS WAREHOUSE_SIZE, 4 AS NODES
+                    UNION ALL
+                    SELECT 'LARGE' AS WAREHOUSE_SIZE, 8 AS NODES
+                    UNION ALL
+                    SELECT 'XLARGE' AS WAREHOUSE_SIZE, 16 AS NODES
+                    UNION ALL
+                    SELECT '2XLARGE' AS WAREHOUSE_SIZE, 32 AS NODES
+                    UNION ALL
+                    SELECT '3XLARGE' AS WAREHOUSE_SIZE, 64 AS NODES
+                    UNION ALL
+                    SELECT '4XLARGE' AS WAREHOUSE_SIZE, 128 AS NODES
+                    )
+        )
            SELECT QH.QUERY_ID
             ,QH.QUERY_TYPE
             ,QH.QUERY_TEXT
@@ -801,10 +893,12 @@ class SNFLKQuery():
             ,QH.PARTITIONS_TOTAL
             ,ROUND((QH.COMPILATION_TIME/(1000)),2) AS COMPILATION_TIME_SEC
             ,ROUND((QH.EXECUTION_TIME/(1000*60)),2) AS EXECUTION_TIME_MIN
+            ,ROUND((QH.EXECUTION_TIME/(1000*60*60))*WS.NODES,2) as CREDITS
             ,QH.CLUSTER_NUMBER
             ,QH.EXECUTION_STATUS
 
         from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
+        JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
         where 1=1
         and TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
             and TOTAL_ELAPSED_TIME > 0 --only get queries that actually used compute
