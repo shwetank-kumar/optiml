@@ -1,8 +1,11 @@
 from datetime import date,datetime,time
+import datetime
 import functools
+from statistics import stdev,mean
 import os
 import pandas as pd
 import pathlib
+from tabulate import tabulate
 
 class SNFLKQuery():
     credit_values = {
@@ -106,6 +109,31 @@ class SNFLKQuery():
         # df_select=df_concat[['user_name','credits','dollars','hourly_start_time','category_name']]
 
         return df_concat
+
+
+    
+    def total_breakdown_analysis(self, start_date, end_date=''):
+        if not start_date:
+            start_date=datetime.datetime.now() - datetime.timedelta(30)
+        if not end_date:
+            end_date=datetime.datetime.now()
+        df=self.total_cost_breakdown_ts(start_date,end_date)
+        date_df=df.hourly_start_time.dt.date
+        df_breakdown=df.groupby([date_df,'category_name'])['credits'].sum().reset_index()
+        df_compute=df_breakdown.loc[df_breakdown['category_name'] == 'Compute']
+        compute_credits_std=df_compute["credits"].std()
+        compute_credits_mean=df_compute["credits"].mean()
+        df_storage=df_breakdown.loc[df_breakdown['category_name'] == 'Storage']
+        storage_credits_std=df_storage["credits"].std()
+        storage_credits_mean=df_storage["credits"].mean()
+        df_cloud_services=df_breakdown.loc[df_breakdown['category_name'] == 'Cloud services']
+        cloud_services_credits_std=df_cloud_services["credits"].std()
+        cloud_services_credits_mean=df_cloud_services["credits"].mean()
+        table = [['Category Name', 'Credits stdv', 'Credits Mean'], 
+         ['Compute', compute_credits_std, compute_credits_mean], 
+         ['Storage', storage_credits_std, storage_credits_mean], 
+         ['Cloud services', cloud_services_credits_std, cloud_services_credits_mean]]
+        return tabulate(table, headers='firstrow')
 
     # @simple_cache
     ##TODO: This can be consolidated with cost_by_wh except this one right now
