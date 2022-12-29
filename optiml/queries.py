@@ -266,15 +266,14 @@ class SNFLKQuery():
         if self.credit_value:
             credit_val = SNFLKQuery.credit_values[self.credit_value]
         sql = f"""
-        SELECT DISTINCT
-                 WEH.USER_NAME,
-                 WMH.WAREHOUSE_NAME
-                ,WMH.CREDITS_USED_COMPUTE as credits
-                ,({credit_val}*credits) as dollars
-                ,date_trunc('hour', WMH.start_time) as hourly_start_time
-                ,'Compute' as category_name
-        from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH inner join {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_EVENTS_HISTORY WEH on WMH.WAREHOUSE_ID = WEH.WAREHOUSE_ID
-        where WMH.START_TIME between '{start_date}' and '{end_date}' order by 4 asc;
+        select
+            warehouse_name
+            ,credits_used_compute as credits
+            ,({credit_val}*credits_used_compute) as dollars
+            ,date_trunc('hour', WMH.start_time) as hourly_start_time
+            ,'Compute' as category_name
+         from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH
+         where WMH.START_TIME between '{start_date}' and '{end_date}' order by 4 asc;      
         """
         ## Removing localization on the timestamp so it can bite us in the ass
         ## later
@@ -428,7 +427,6 @@ class SNFLKQuery():
 
     # @simple_cache
     def cost_of_storage_ts(self, start_date='2022-01-01', end_date=''):
-        ##TODO: Distribute daily storage costs hourly over the day so that ts is consistent with other ts
         """
         Calculates the overall cost of storage usage
         given time period using Storage Usage Su table.
@@ -464,6 +462,69 @@ class SNFLKQuery():
         df.rename(columns = {'start_time':'hourly_start_time'}, inplace = True)
         return df
 
+    def cost_by_user_ts(self, start_date='2022-01-01', end_date=''):
+        ##TODO: @Manasvini to review
+        """
+        Calculates the overall cost of usage by partner application over a
+        Outputs a dataframe with the following columns:
+        Category name: Category name as Storage
+        Usage date: The date on which storage is used
+        Dollars used: Total cost of storage (in dollars) used
+        """
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        
+        sql=f"""
+            --THIS IS APPROXIMATE CREDIT CONSUMPTION BY USER
+            WITH USER_HOUR_EXECUTION_CTE AS (
+                SELECT  USER_NAME
+                ,WAREHOUSE_NAME
+                ,DATE_TRUNC('hour',START_TIME) as hourly_start_time
+                ,SUM(EXECUTION_TIME)  as USER_HOUR_EXECUTION_TIME
+                FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
+                WHERE WAREHOUSE_NAME IS NOT NULL
+                AND EXECUTION_TIME > 0
+            
+            --Change the below filter if you want to look at a longer range than the last 1 month 
+                AND START_TIME  between '{start_date}' and '{end_date}'
+                group by 1,2,3
+                )
+            , HOUR_EXECUTION_CTE AS (
+                SELECT  hourly_start_time
+                ,WAREHOUSE_NAME
+                ,SUM(USER_HOUR_EXECUTION_TIME) AS HOUR_EXECUTION_TIME
+                FROM USER_HOUR_EXECUTION_CTE
+                group by 1,2
+            )
+            , APPROXIMATE_CREDITS AS (
+                SELECT 
+                A.USER_NAME
+                ,C.WAREHOUSE_NAME
+                ,(A.USER_HOUR_EXECUTION_TIME/B.HOUR_EXECUTION_TIME)*C.CREDITS_USED AS APPROXIMATE_CREDITS_USED
+                ,A.hourly_start_time as hourly_start_time
+                FROM USER_HOUR_EXECUTION_CTE A
+                JOIN HOUR_EXECUTION_CTE B  ON A.hourly_start_time = B.hourly_start_time and B.WAREHOUSE_NAME = A.WAREHOUSE_NAME
+                JOIN {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY C ON C.WAREHOUSE_NAME = A.WAREHOUSE_NAME AND C.START_TIME = A.hourly_start_time
+            )
+
+            SELECT 
+            USER_NAME
+            ,WAREHOUSE_NAME
+            ,SUM(APPROXIMATE_CREDITS_USED) AS APPROXIMATE_CREDITS_USED
+            ,hourly_start_time
+            FROM APPROXIMATE_CREDITS
+            GROUP BY 1,2,4
+            ORDER BY 3 DESC
+            ;
+        """
+        ## Removing localization on the timestamp so it can bite us in the ass
+        ## later
+        # df = self.ts_remove_localization(self.query_to_df(sql))
+        df = self.ts_remove_localization(self.query_to_df(sql))
+        return df
+
+    
     def cost_by_partner_tool_ts(self, start_date='2022-01-01', end_date=''):
         ##TODO: Convert partner tool consumption query into
         # a hourly timeseries so that its consistent with others and can be plotted out
