@@ -881,36 +881,39 @@ class SNFLKQuery():
     ##TODO: Convert this into N most frequently executed Select queries so these can be identified 
     # as targets for creating new tables or materialized views
     
-    def n_most_executed_select_queries(self, start_date='2022-01-01',end_date='', n=10):
+    def n_most_frequently_executed_select_queries(self, start_date='2022-01-01',end_date='', n=10):
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
         sql=f"""
-    
+
         SELECT 
-        QUERY_TEXT
-        ,QUERY_TYPE
+        Q.QUERY_TEXT
+        ,Q.QUERY_TYPE
         ,count(*) as number_of_queries
-        ,sum(BYTES_SPILLED_TO_LOCAL_STORAGE) as BYTES_SPILLED_TO_LOCAL_STORAGE
-        ,sum(BYTES_SPILLED_TO_REMOTE_STORAGE) as BYTES_SPILLED_TO_REMOTE_STORAGE
-        ,sum(TOTAL_ELAPSED_TIME)/1000 as execution_seconds
-        ,sum(TOTAL_ELAPSED_TIME)/(1000*60) as execution_minutes
-        ,sum(TOTAL_ELAPSED_TIME)/(1000*60*60) as execution_hours
-        ,sum(PARTITIONS_SCANNED) as PARTITIONS_SCANNED
-        ,sum(PARTITIONS_TOTAL) as PARTITIONS_TOTAL
-        ,max(cluster_number)
+        ,Q.user_name
+        ,Q.warehouse_name
+        ,sum(Q.BYTES_SPILLED_TO_LOCAL_STORAGE) as BYTES_SPILLED_TO_LOCAL_STORAGE
+        ,sum(Q.BYTES_SPILLED_TO_REMOTE_STORAGE) as BYTES_SPILLED_TO_REMOTE_STORAGE
+        ,sum(Q.TOTAL_ELAPSED_TIME)/1000 as execution_seconds
+        ,sum(Q.TOTAL_ELAPSED_TIME)/(1000*60) as execution_minutes
+        ,sum(Q.TOTAL_ELAPSED_TIME)/(1000*60*60) as execution_hours
+        ,sum(Q.PARTITIONS_SCANNED) as PARTITIONS_SCANNED
+        ,sum(Q.PARTITIONS_TOTAL) as PARTITIONS_TOTAL
+        ,max(Q.cluster_number)
         from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY Q
         where 1=1
         and QUERY_TYPE='SELECT'
         and TO_DATE(Q.START_TIME) between '{start_date}' and '{end_date}'
         and TOTAL_ELAPSED_TIME > 0 --only get queries that actually used compute
-        group by 1,2
+        group by 1,2,4,5
         having count(*) >= 10 --configurable/minimal threshold
         order by 3 desc
         limit {n} --configurable upper bound threshold
         ;
-      """
+        """
         df=self.query_to_df(sql)
+        df["average_execution_time_milliseconds"]=(df["execution_seconds"]*1000)/df["number_of_queries"]
         return df
 
     def longest_running_queries(self, start_date='2022-01-01',end_date='', n=10):
