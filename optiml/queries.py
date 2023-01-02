@@ -63,6 +63,7 @@ class SNFLKQuery():
         data_one.columns = data_one.columns.str.lower()
         return data_one
 
+
     def ts_remove_localization(self, df):
         df["hourly_start_time"] = [d.tz_localize(None) for d in df["hourly_start_time"]]
         #df["end_time"] = [d.tz_localize(None) for d in df["end_time"]]
@@ -1036,7 +1037,7 @@ class SNFLKQuery():
         ,locked_until_time
         ,password_last_set_time
         FROM {self.dbname}.ACCOUNT_USAGE.USERS 
-        WHERE LAST_SUCCESS_LOGIN not between '{start_date}' and '{end_date}'
+        WHERE LAST_SUCCESS_LOGIN < '{start_date}'
         AND DELETED_ON IS NULL
         ORDER BY LAST_SUCCESS_LOGIN ASC
         """
@@ -1049,7 +1050,7 @@ class SNFLKQuery():
             end_date = str(today_date)
         sql=f"""
         SELECT
-        nameprint(df.iloc[3]["query_text"])
+        name
         ,created_on
         ,deleted_on
         ,login_name
@@ -1077,16 +1078,34 @@ class SNFLKQuery():
         SELECT USER_NAME
         ,COUNT(*) as COUNT_OF_QUERIES
         FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY
-        WHERE START_TIME >= dateadd(month,-1,current_timestamp())
+        WHERE START_TIME between '{start_date}' and '{end_date}'
         AND PARTITIONS_SCANNED > (PARTITIONS_TOTAL*0.95)
         AND QUERY_TYPE NOT LIKE 'CREATE%'
         group by 1
         order by 2 desc;
         
         """
-        df=self.query_to_df(sql)
        
+        df=self.query_to_df(sql)
         return df
+    def queries_full_table_scan(self, start_date='2022-01-01',end_date='',n=10):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql=f"""
+        SELECT * 
+        FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY
+        WHERE START_TIME between '{start_date}' and '{end_date}'
+        AND PARTITIONS_SCANNED > (PARTITIONS_TOTAL*0.95)
+        AND QUERY_TYPE NOT LIKE 'CREATE%'
+        ORDER BY PARTITIONS_SCANNED DESC
+        LIMIT {n}  -- Configurable threshold that defines "TOP N=50"
+        ;
+        """
+        df=self.query_to_df(sql)
+        return df
+
+
 
     def heavy_users(self, start_date='2022-01-01',end_date='',n=10):
         if not end_date:
@@ -1098,7 +1117,7 @@ class SNFLKQuery():
         , warehouse_name
         , avg(case when partitions_total > 0 then partitions_scanned / partitions_total else 0 end) avg_pct_scanned
         from   {self.dbname}.account_usage.query_history
-        where  start_time::date > dateadd('days', -45, current_date)
+        WHERE START_TIME between '{start_date}' and '{end_date}'
         group by 1, 2
         order by 3 desc"""
         df=self.query_to_df(sql)
@@ -1135,7 +1154,7 @@ class SNFLKQuery():
         select *
         from {self.dbname}.account_usage.task_history
         WHERE STATE = 'FAILED'
-        and query_start_time >= DATEADD (day,-7, CURRENT_TIMESTAMP())
+        and query_start_time between '{start_date}' and '{end_date}'
         order by query_start_time DESC
         
         """
@@ -1151,7 +1170,7 @@ class SNFLKQuery():
         ,*
         from {self.dbname}.account_usage.task_history
         WHERE STATE = 'SUCCEEDED'
-        and query_start_time >= DATEADD (day, -7, CURRENT_TIMESTAMP())
+        and query_start_time between '{start_date}' and '{end_date}'
         order by DURATION_SECONDS desc
         """
         df=self.query_to_df(sql)
@@ -1173,7 +1192,23 @@ class SNFLKQuery():
         """
         df=self.query_to_df(sql)
         return df
+    def table_streams(self,start_date="2022-01-01", end_date=""):
+        sql="SHOW STREAMS;"
+        cursor=self.connection.cursor()
+        cursor.execute(sql)
+        sql="""
+        select * 
+        from table(result_scan(last_query_id())) 
+        where "stale" = true;
+        """
+        df=self.query_to_df(sql)
+        return df
+        
 
+        
+        
+        
+        
         
  
 
