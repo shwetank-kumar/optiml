@@ -1178,6 +1178,73 @@ class SNFLKQuery():
         """
         df=self.query_to_df(sql)
         return df
+    def cost_by_user(self,start_date="2022-01-01", end_date=""):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql=f"""
+
+        --THIS IS APPROXIMATE CREDIT CONSUMPTION BY USER
+        WITH USER_HOUR_EXECUTION_CTE AS (
+            SELECT  USER_NAME
+            ,WAREHOUSE_NAME
+            ,DATE_TRUNC('hour',START_TIME) as START_TIME_HOUR
+            ,SUM(EXECUTION_TIME)  as USER_HOUR_EXECUTION_TIME
+            FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY
+            WHERE WAREHOUSE_NAME IS NOT NULL
+            AND EXECUTION_TIME > 0
+        
+        --Change the below filter if you want to look at a longer range than the last 1 month 
+            AND START_TIME between '{start_date}' and '{end_date}'
+            group by 1,2,3
+            )
+        , HOUR_EXECUTION_CTE AS (
+            SELECT  START_TIME_HOUR
+            ,WAREHOUSE_NAME
+            ,SUM(USER_HOUR_EXECUTION_TIME) AS HOUR_EXECUTION_TIME
+            FROM USER_HOUR_EXECUTION_CTE
+            group by 1,2
+        )
+        , APPROXIMATE_CREDITS AS (
+            SELECT 
+            A.USER_NAME
+            ,C.WAREHOUSE_NAME
+            ,(A.USER_HOUR_EXECUTION_TIME/B.HOUR_EXECUTION_TIME)*C.CREDITS_USED AS APPROXIMATE_CREDITS_USED
+
+            FROM USER_HOUR_EXECUTION_CTE A
+            JOIN HOUR_EXECUTION_CTE B  ON A.START_TIME_HOUR = B.START_TIME_HOUR and B.WAREHOUSE_NAME = A.WAREHOUSE_NAME
+            JOIN {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY C ON C.WAREHOUSE_NAME = A.WAREHOUSE_NAME AND C.START_TIME = A.START_TIME_HOUR
+        )
+
+        SELECT 
+        USER_NAME
+        ,count(*) as query_count
+        ,SUM(APPROXIMATE_CREDITS_USED) AS APPROXIMATE_CREDITS_USED
+        FROM APPROXIMATE_CREDITS
+        GROUP BY 1
+        ORDER BY 1 ASC
+        ;
+        """
+        df=self.query_to_df(sql)
+        return df
+    def credit_by_query(self,start_date="2022-01-01", end_date=""):
+        df=self.cost_by_user(start_date,end_date)
+        df["credit_by_query"]=df["approximate_credits_used"]/df["query_count"]
+        return df
+    def storage_stage(self,start_date="2022-01-01", end_date=""):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql=f"""
+        SELECT AVERAGE_STAGE_BYTES, USAGE_DATE
+        from {self.dbname}.ACCOUNT_USAGE.STAGE_STORAGE_USAGE_HISTORY
+        WHERE USAGE_DATE between '{start_date}' and '{end_date}'
+        """
+        df=self.query_to_df(sql)
+        return df
+
+                
+
         
 
         
