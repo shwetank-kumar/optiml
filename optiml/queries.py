@@ -943,15 +943,9 @@ class SNFLKQuery():
                 left join {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY b on (b.WAREHOUSE_NAME = a.name 
                                                                                     and b.WAREHOUSE_NAME is null
                                                                                     and b.START_TIME between '{start_date}' and '{end_date }')
-            union
-            select name, created_on, resumed_on, state, size, running, date_trunc('month', START_TIME)::date as date_month  
-            from {self.dbname}.ACCOUNT_USAGE.WAREHOUSES a
-                left join {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY b on (b.WAREHOUSE_NAME = a.name 
-                                                                                    and b.WAREHOUSE_NAME is not null
-                                                                                    and b.START_TIME between '{start_date}' and '{end_date }')
             order by 7, name;
         """
-        # print(sql)
+        #print(sql)
         
         df=self.query_to_df(sql)
         return df 
@@ -983,6 +977,29 @@ class SNFLKQuery():
         
         df=self.query_to_df(sql)
         return df
+
+    def wh_scaled_up_out_with_query(self,start_date="2022-01-01", end_date=""):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+
+        sql=f"""
+            SELECT 
+            date_trunc('month', START_TIME)::date as date_month
+            ,WAREHOUSE_NAME
+            --,WAREHOUSE_SIZE
+            ,count(distinct QUERY_ID) as no_of_queries
+            FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY
+            WHERE  date_trunc('month', START_TIME) >= '{start_date}' and date_trunc('month', START_TIME) < '{end_date}'
+            and WAREHOUSE_NAME is not null
+            group by 1,2--,3
+            ORDER BY 1;
+        """
+
+        # print(sql)
+        
+        df=self.query_to_df(sql)
+        return df
         
     def wh_required_mcw(self):
         sql=f"""
@@ -990,7 +1007,7 @@ class SNFLKQuery():
             ,WAREHOUSE_NAME
             ,SUM(AVG_RUNNING) AS SUM_RUNNING
             ,SUM(AVG_QUEUED_LOAD) AS SUM_QUEUED
-            FROM "SNOWFLAKE"."ACCOUNT_USAGE"."WAREHOUSE_LOAD_HISTORY"
+            FROM {self.dbname}."ACCOUNT_USAGE"."WAREHOUSE_LOAD_HISTORY"
             WHERE TO_DATE(START_TIME) >= DATEADD(month,-1,CURRENT_TIMESTAMP())
             GROUP BY 1,2
             HAVING SUM(AVG_QUEUED_LOAD) >0;
@@ -999,14 +1016,14 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
         return df
 
-    def wh_under_utilization (self):
+    def wh_utilization (self, start_date='2022-01-01'):
         sql=f""" SELECT
        WMH.WAREHOUSE_NAME
       ,WMH.START_TIME
       ,WMH.CREDITS_USED
       ,SUM(COALESCE(B.EXECUTION_TIME_SECONDS,0)) as TOTAL_EXECUTION_TIME_SECONDS
       ,SUM(COALESCE(QUERY_COUNT,0)) AS QUERY_COUNT
-      FROM SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH
+      FROM {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH
 LEFT JOIN (
 
       --QUERIES FULLY EXECUTED WITHIN THE HOUR
@@ -1015,12 +1032,12 @@ LEFT JOIN (
         ,WMH.START_TIME
         ,SUM(COALESCE(QH.EXECUTION_TIME,0))/(1000) AS EXECUTION_TIME_SECONDS
         ,COUNT(DISTINCT QH.QUERY_ID) AS QUERY_COUNT
-      FROM SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY     WMH
-      JOIN SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY QH ON QH.WAREHOUSE_NAME = WMH.WAREHOUSE_NAME
+      FROM {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY     WMH
+      JOIN {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH ON QH.WAREHOUSE_NAME = WMH.WAREHOUSE_NAME
                                                                           AND QH.START_TIME BETWEEN WMH.START_TIME AND WMH.END_TIME
                                                                           AND QH.END_TIME BETWEEN WMH.START_TIME AND WMH.END_TIME
-      WHERE TO_DATE(WMH.START_TIME) >= DATEADD(week,-1,CURRENT_TIMESTAMP())
-      AND TO_DATE(QH.START_TIME) >= DATEADD(week,-1,CURRENT_TIMESTAMP())
+      WHERE TO_DATE(WMH.START_TIME) >= '{start_date}'
+      AND TO_DATE(QH.START_TIME) >= '{start_date}'
       GROUP BY
       WMH.WAREHOUSE_NAME
       ,WMH.START_TIME
@@ -1033,12 +1050,12 @@ LEFT JOIN (
         ,WMH.START_TIME
         ,SUM(COALESCE(DATEDIFF(seconds,QH.START_TIME,WMH.END_TIME),0)) AS EXECUTION_TIME_SECONDS
         ,COUNT(DISTINCT QUERY_ID) AS QUERY_COUNT
-      FROM SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY     WMH
-      JOIN SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY             QH ON QH.WAREHOUSE_NAME = WMH.WAREHOUSE_NAME
+      FROM {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY     WMH
+      JOIN {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY             QH ON QH.WAREHOUSE_NAME = WMH.WAREHOUSE_NAME
                                                                           AND QH.START_TIME BETWEEN WMH.START_TIME AND WMH.END_TIME
                                                                           AND QH.END_TIME > WMH.END_TIME
-      WHERE TO_DATE(WMH.START_TIME) >= DATEADD(week,-1,CURRENT_TIMESTAMP())
-      AND TO_DATE(QH.START_TIME) >= DATEADD(week,-1,CURRENT_TIMESTAMP())
+      WHERE TO_DATE(WMH.START_TIME) >= '{start_date}'
+      AND TO_DATE(QH.START_TIME) >= '{start_date}'
       GROUP BY
       WMH.WAREHOUSE_NAME
       ,WMH.START_TIME
@@ -1051,12 +1068,12 @@ LEFT JOIN (
         ,WMH.START_TIME
         ,SUM(COALESCE(DATEDIFF(seconds,WMH.START_TIME,QH.END_TIME),0)) AS EXECUTION_TIME_SECONDS
         ,COUNT(DISTINCT QUERY_ID) AS QUERY_COUNT
-      FROM SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY     WMH
-      JOIN SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY             QH ON QH.WAREHOUSE_NAME = WMH.WAREHOUSE_NAME
+      FROM {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY     WMH
+      JOIN {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY             QH ON QH.WAREHOUSE_NAME = WMH.WAREHOUSE_NAME
                                                                           AND QH.END_TIME BETWEEN WMH.START_TIME AND WMH.END_TIME
                                                                           AND QH.START_TIME < WMH.START_TIME
-      WHERE TO_DATE(WMH.START_TIME) >= DATEADD(week,-1,CURRENT_TIMESTAMP())
-      AND TO_DATE(QH.START_TIME) >= DATEADD(week,-1,CURRENT_TIMESTAMP())
+      WHERE TO_DATE(WMH.START_TIME) >= '{start_date}'
+      AND TO_DATE(QH.START_TIME) >= '{start_date}'
       GROUP BY
       WMH.WAREHOUSE_NAME
       ,WMH.START_TIME
@@ -1069,23 +1086,26 @@ LEFT JOIN (
         ,WMH.START_TIME
         ,SUM(COALESCE(DATEDIFF(seconds,WMH.START_TIME,WMH.END_TIME),0)) AS EXECUTION_TIME_SECONDS
         ,COUNT(DISTINCT QUERY_ID) AS QUERY_COUNT
-      FROM SNOWFLAKE.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY     WMH
-      JOIN SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY             QH ON QH.WAREHOUSE_NAME = WMH.WAREHOUSE_NAME
+      FROM {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY     WMH
+      JOIN {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY             QH ON QH.WAREHOUSE_NAME = WMH.WAREHOUSE_NAME
                                                                           AND WMH.START_TIME > QH.START_TIME
                                                                           AND WMH.END_TIME < QH.END_TIME
-      WHERE TO_DATE(WMH.START_TIME) >= DATEADD(week,-1,CURRENT_TIMESTAMP())
-      AND TO_DATE(QH.START_TIME) >= DATEADD(week,-1,CURRENT_TIMESTAMP())
+      WHERE TO_DATE(WMH.START_TIME) >= '{start_date}'
+      AND TO_DATE(QH.START_TIME) >= '{start_date}'
       GROUP BY
       WMH.WAREHOUSE_NAME
       ,WMH.START_TIME
 
 ) B ON B.WAREHOUSE_NAME = WMH.WAREHOUSE_NAME AND B.START_TIME = WMH.START_TIME
-WHERE TO_DATE(WMH.START_TIME) >= DATEADD(week,-1,CURRENT_TIMESTAMP())
+WHERE TO_DATE(WMH.START_TIME) >= '{start_date}'
     -- and WMH.CREDITS_USED < '0'
 GROUP BY
       WMH.WAREHOUSE_NAME
       ,WMH.START_TIME
       ,WMH.CREDITS_USED
+order by 
+WMH.WAREHOUSE_NAME
+      ,WMH.START_TIME
 ; """
         df=self.query_to_df(sql)
         return df
