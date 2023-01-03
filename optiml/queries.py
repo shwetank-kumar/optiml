@@ -143,7 +143,7 @@ class SNFLKQuery():
                       ,({credit_val}*credits_used_cloud_services) as cloud_services_dollars
                       ,date_trunc('hour', start_time) as hourly_start_time
                 from {self.dbname}.account_usage.warehouse_metering_history
-                where start_time between '{start_date}' and '{end_date}' -->= dateadd(day, -5, current_timestamp())
+                where start_time between '{start_date}' and '{end_date}'
                 order by 4 asc;
         """
         ## Removing localization on the timestamp so it can bite us in the ass
