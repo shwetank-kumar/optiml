@@ -631,7 +631,6 @@ class SNFLKQuery():
             ,QH.QUERY_TYPE
             ,QH.QUERY_TEXT
             ,QH.USER_NAME
-            ,WS.NODES
             ,QH.ROLE_NAME
             ,QH.DATABASE_NAME
             ,QH.SCHEMA_NAME
