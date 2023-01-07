@@ -519,6 +519,8 @@ class SNFLKQuery():
             --THIS IS APPROXIMATE CREDIT CONSUMPTION BY CLIENT APPLICATION
             WITH CLIENT_HOUR_EXECUTION_CTE AS (
                 SELECT  CASE
+                    WHEN CLIENT_APPLICATION_ID LIKE '.NET %' THEN '.NET'
+                    WHEN CLIENT_APPLICATION_ID LIKE 'Javascript %' THEN 'Javascript'
                     WHEN CLIENT_APPLICATION_ID LIKE 'Go %' THEN 'Go'
                     WHEN CLIENT_APPLICATION_ID LIKE 'Snowflake UI %' THEN 'Snowflake UI'
                     WHEN CLIENT_APPLICATION_ID LIKE 'SnowSQL %' THEN 'SnowSQL'
