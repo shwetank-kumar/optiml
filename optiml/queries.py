@@ -1519,35 +1519,35 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
         return df
 
-    def wh_profiling_queued_load(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH'):
+    def wh_profiling_queued_load(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH',delta='minute'):
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
         sql=f"""
         WITH wlh as (
-        SELECT DATE_TRUNC('minute', wl.start_time) start_time_trunced_at_minute,
+        SELECT DATE_TRUNC('{delta}', wl.start_time) start_time_truncated,
         AVG(avg_running) avg_running, AVG(avg_queued_load) avg_queued_load 
         FROM {self.dbname}.account_usage.warehouse_load_history wl
-        WHERE DATE_TRUNC('DAY', wl.start_time)='{start_date}'
+        WHERE DATE_TRUNC('DAY', wl.start_time) between'{start_date}' and '{end_date}'
         AND wl.warehouse_name = '{wh_name}'
-        GROUP BY  start_time_trunced_at_minute
-        ORDER BY start_time_trunced_at_minute asc
+        GROUP BY  start_time_truncated
+        ORDER BY start_time_truncated asc
         ),
         qh as (
-        SELECT DATE_TRUNC('minute', qh.start_time) start_time_trunced_at_minute,
+        SELECT DATE_TRUNC('{delta}', qh.start_time) start_time_truncated,
         COUNT(*) query_count
         FROM {self.dbname}.account_usage.query_history qh
-        WHERE DATE_TRUNC('DAY', qh.start_time)='{start_date}'
+        WHERE DATE_TRUNC('DAY', qh.start_time) between'{start_date}' and '{end_date}'
         AND qh.warehouse_name = '{wh_name}'
-        GROUP BY  start_time_trunced_at_minute
-        ORDER BY  start_time_trunced_at_minute
+        GROUP BY  start_time_truncated
+        ORDER BY  start_time_truncated
         )
-        SELECT wlh.start_time_trunced_at_minute, 
+        SELECT wlh.start_time_truncated, 
         wlh.avg_running, 
         wlh.avg_queued_load, 
         qh.query_count
         FROM wlh,qh
-        WHERE wlh.start_time_trunced_at_minute = qh.start_time_trunced_at_minute
+        WHERE wlh.start_time_truncated = qh.start_time_truncated
         """
         df=self.query_to_df(sql)
         return df
