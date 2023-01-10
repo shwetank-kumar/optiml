@@ -1519,7 +1519,80 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
         return df
 
-                
+    def wh_profiling_queued_load(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH'):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql=f"""
+        WITH wlh as (
+        SELECT DATE_TRUNC('minute', wl.start_time) start_time_trunced_at_minute,
+        AVG(avg_running) avg_running, AVG(avg_queued_load) avg_queued_load 
+        FROM {self.dbname}.account_usage.warehouse_load_history wl
+        WHERE DATE_TRUNC('DAY', wl.start_time)='{start_date}'
+        AND wl.warehouse_name = '{wh_name}'
+        GROUP BY  start_time_trunced_at_minute
+        ORDER BY start_time_trunced_at_minute asc
+        ),
+        qh as (
+        SELECT DATE_TRUNC('minute', qh.start_time) start_time_trunced_at_minute,
+        COUNT(*) query_count
+        FROM {self.dbname}.account_usage.query_history qh
+        WHERE DATE_TRUNC('DAY', qh.start_time)='{start_date}'
+        AND qh.warehouse_name = '{wh_name}'
+        GROUP BY  start_time_trunced_at_minute
+        ORDER BY  start_time_trunced_at_minute
+        )
+        SELECT wlh.start_time_trunced_at_minute, 
+        wlh.avg_running, 
+        wlh.avg_queued_load, 
+        qh.query_count
+        FROM wlh,qh
+        WHERE wlh.start_time_trunced_at_minute = qh.start_time_trunced_at_minute
+        """
+        df=self.query_to_df(sql)
+        return df
+
+    def count_of_queries_wh(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH'):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql=f"""
+        SELECT COUNT(*) AS QUERY_COUNT,
+        WAREHOUSE_NAME,
+        date_trunc('hour', start_time) as hourly_start_time
+        from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY
+        where warehouse_name='{wh_name}'
+        and start_time between '{start_date}' and '{end_date}'
+        group by warehouse_name,hourly_start_time
+        order by hourly_start_time ASC
+        """
+        df=self.query_to_df(sql)
+        return df
+
+
+    def query_find(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH'):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql=f"""
+        SELECT QUERY_ID,
+        EXECUTION_TIME,
+        START_TIME,
+        COMPILATION_TIME,
+        TOTAL_ELAPSED_TIME,
+        QUEUED_OVERLOAD_TIME,
+        QUEUED_PROVISIONING_TIME,
+        QUEUED_REPAIR_TIME
+        FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY
+        where START_TIME between '{start_date}' and '{end_date}'
+        and warehouse_name='{wh_name}'
+        order by execution_time desc
+        """
+        df=self.query_to_df(sql)
+        return df
+        
+
+    
 
         
 
