@@ -595,69 +595,7 @@ class SNFLKQuery():
         credit_val = ''
         if self.credit_value:
             credit_val = SNFLKQuery.credit_values[self.credit_value]
-        # sql = f"""
-        # WITH WAREHOUSE_SIZE AS
-        # (
-        #     SELECT WAREHOUSE_SIZE, NODES
-        #     FROM (
-        #             SELECT 'XSMALL' AS WAREHOUSE_SIZE, 1 AS NODES
-        #             UNION ALL
-        #             SELECT 'SMALL' AS WAREHOUSE_SIZE, 2 AS NODES
-        #             UNION ALL
-        #             SELECT 'MEDIUM' AS WAREHOUSE_SIZE, 4 AS NODES
-        #             UNION ALL
-        #             SELECT 'LARGE' AS WAREHOUSE_SIZE, 8 AS NODES
-        #             UNION ALL
-        #             SELECT 'XLARGE' AS WAREHOUSE_SIZE, 16 AS NODES
-        #             UNION ALL
-        #             SELECT '2XLARGE' AS WAREHOUSE_SIZE, 32 AS NODES
-        #             UNION ALL
-        #             SELECT '3XLARGE' AS WAREHOUSE_SIZE, 64 AS NODES
-        #             UNION ALL
-        #             SELECT '4XLARGE' AS WAREHOUSE_SIZE, 128 AS NODES
-        #             )
-        # ),
-        # QUERY_HISTORY AS
-        # (
-        #     SELECT QH.QUERY_ID
-        #         ,QH.QUERY_TEXT
-        #         ,QH.USER_NAME
-        #         ,QH.ROLE_NAME
-        #         ,QH.EXECUTION_TIME
-        #         ,QH.WAREHOUSE_SIZE
-        #     FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
-        #     WHERE START_TIME between '{start_date}' and '{end_date}'
-        # )
-
-        # SELECT QH.QUERY_ID
-        #     ,QH.QUERY_TYPE
-        #     ,QH.QUERY_TEXT
-        #     ,QH.USER_NAME
-        #     ,QH.ROLE_NAME
-        #     ,QH.DATABASE_NAME
-        #     ,QH.SCHEMA_NAME
-        #     ,QH.START_TIME
-        #     ,QH.END_TIME
-        #     ,QH.BYTES_SCANNED
-        #     ,QH.PERCENTAGE_SCANNED_FROM_CACHE
-        #     ,QH.QUEUED_OVERLOAD_TIME
-        #     ,QH.WAREHOUSE_NAME
-        #     ,WS.WAREHOUSE_SIZE
-        #     ,QH.BYTES_SPILLED_TO_LOCAL_STORAGE
-        #     ,QH.BYTES_SPILLED_TO_REMOTE_STORAGE
-        #     ,QH.PARTITIONS_SCANNED
-        #     ,QH.PARTITIONS_TOTAL
-        #     ,ROUND((QH.COMPILATION_TIME/(1000)),2) AS COMPILATION_TIME_SEC
-        #     ,ROUND((QH.EXECUTION_TIME/(1000*60)),2) AS EXECUTION_TIME_MIN
-        #     ,ROUND((QH.EXECUTION_TIME/(1000*60*60))*WS.NODES,2) as CREDITS
-        #     ,QH.CLUSTER_NUMBER
-        #     ,QH.EXECUTION_STATUS
-        # FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
-        # JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
-        # ORDER BY CREDITS DESC
-        # LIMIT {n}
-        # ;
-        # """
+        
         sql = f"""
             WITH WAREHOUSE_SIZE AS
             (
@@ -1046,23 +984,6 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
         return df
 
-    # Same results as executed_queries
-
-    # def most_executed_using_hash(self, start_date='2022-01-01',end_date=''):
-    #     if not end_date:
-    #         today_date = date.today()
-    #         end_date = str(today_date)
-    #     sql=f"""
-    #     select hash(query_text), query_text, count(*), avg(compilation_time), avg(execution_time)
-    #     from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY
-    #     WHERE TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
-    #     group by hash(query_text), query_text
-    #     order by count(*) desc"""
-        
-    #     df=self.query_to_df(sql)
-    #     return df
-
-  
    
     ### User queries ---
     
@@ -1334,24 +1255,6 @@ class SNFLKQuery():
         return df
 
 
-    def plot_warehouse_ts(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH'):
-        if not end_date:
-            today_date = date.today()
-            end_date = str(today_date)
-        sql=f"""
-        SELECT ws.warehouse_name,
-        ws.avg_running,
-        ws.avg_queued_load
-        ,date_trunc('hour', ws.start_time) as hourly_start_time
-        ,ws.start_time
-        from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_LOAD_HISTORY ws
-        WHERE START_TIME between '{start_date}' and '{end_date}'
-        and ws.warehouse_name='{wh_name}'
-        order by hourly_start_time ASC
-        """
-        df=self.query_to_df(sql)
-        return df
-    
     def wh_analysis_metrics(self,start_date="2022-01-01", end_date="",n=3):
         if not end_date:
             today_date = date.today()
@@ -1570,7 +1473,7 @@ class SNFLKQuery():
         return df
 
 
-    def query_find(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH'):
+    def query_find(self,start_date="2022-01-01", end_date="", wh_name='DEV_WH', ):
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
