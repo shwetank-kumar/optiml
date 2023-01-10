@@ -1312,15 +1312,38 @@ class SNFLKQuery():
             today_date = date.today()
             end_date = str(today_date)
         sql=f"""
+        WITH WAREHOUSE_SIZE AS
+        (
+            SELECT WAREHOUSE_SIZE, NODES
+            FROM (
+                    SELECT 'X-SMALL' AS WAREHOUSE_SIZE, 1 AS NODES
+                    UNION ALL
+                    SELECT 'SMALL' AS WAREHOUSE_SIZE, 2 AS NODES
+                    UNION ALL
+                    SELECT 'MEDIUM' AS WAREHOUSE_SIZE, 4 AS NODES
+                    UNION ALL
+                    SELECT 'LARGE' AS WAREHOUSE_SIZE, 8 AS NODES
+                    UNION ALL
+                    SELECT 'XLARGE' AS WAREHOUSE_SIZE, 16 AS NODES
+                    UNION ALL
+                    SELECT '2XLARGE' AS WAREHOUSE_SIZE, 32 AS NODES
+                    UNION ALL
+                    SELECT '3XLARGE' AS WAREHOUSE_SIZE, 64 AS NODES
+                    UNION ALL
+                    SELECT '4XLARGE' AS WAREHOUSE_SIZE, 128 AS NODES
+                    )
+        )
         SELECT QUERY_ID,
         EXECUTION_TIME,
         START_TIME,
+        ROUND((EXECUTION_TIME/(1000*60*60))*WS.NODES,2) as CREDITS,
         COMPILATION_TIME,
         TOTAL_ELAPSED_TIME,
         QUEUED_OVERLOAD_TIME,
         QUEUED_PROVISIONING_TIME,
         QUEUED_REPAIR_TIME
-        FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY
+        FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
+        JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
         where START_TIME between '{start_date}' and '{end_date}'
         and warehouse_name='{wh_name}'
         order by execution_time desc
