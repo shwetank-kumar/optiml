@@ -733,7 +733,7 @@ class SNFLKQuery():
         df = self.query_to_df(sql)
         return df
 
-    ##TODO: Update query output columns to be same as expensive queries
+    
     def n_queries_spill_to_storage(self, start_date='2022-01-01', end_date='', n=10):
         """
         Shows queries spilling maximum remote storage
@@ -798,7 +798,7 @@ class SNFLKQuery():
         df = self.query_to_df(sql)
         return df
     
-    ##TODO: Update query output columns to be same as expensive queries
+    
     def n_queries_scanned_most_data(self, start_date='2022-01-01',end_date='2022-02-02',n=10):
         """
         Shows queries that scan the most data
@@ -864,7 +864,7 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
         return df
     
-    ##TODO: Update query output columns to be same as expensive queries
+    
     def n_most_cached_queries(self, start_date='2022-01-01',end_date='', n=10):
         if not end_date:
             today_date = date.today()
@@ -925,8 +925,7 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
         return df
     
-    ##TODO: Update query output columns to be same as expensive queries - you cant do query ID since 
-    # you are grouping on counts so everything except that
+    
     ##TODO: Convert this into N most frequently executed Select queries so these can be identified 
     # as targets for creating new tables or materialized views
     
@@ -1046,22 +1045,6 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
         return df
 
-    # Same results as executed_queries
-
-    # def most_executed_using_hash(self, start_date='2022-01-01',end_date=''):
-    #     if not end_date:
-    #         today_date = date.today()
-    #         end_date = str(today_date)
-    #     sql=f"""
-    #     select hash(query_text), query_text, count(*), avg(compilation_time), avg(execution_time)
-    #     from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY
-    #     WHERE TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
-    #     group by hash(query_text), query_text
-    #     order by count(*) desc"""
-        
-    #     df=self.query_to_df(sql)
-    #     return df
-
   
    
     ### User queries ---
@@ -1133,9 +1116,9 @@ class SNFLKQuery():
         order by 2 desc;
         
         """
-       
         df=self.query_to_df(sql)
         return df
+    
     def queries_full_table_scan(self, start_date='2022-01-01',end_date='',n=10):
         if not end_date:
             today_date = date.today()
@@ -1240,17 +1223,8 @@ class SNFLKQuery():
         """
         df=self.query_to_df(sql)
         return df
-    def table_streams(self,start_date="2022-01-01", end_date=""):
-        sql="SHOW STREAMS;"
-        cursor=self.connection.cursor()
-        cursor.execute(sql)
-        sql="""
-        select * 
-        from table(result_scan(last_query_id())) 
-        where "stale" = true;
-        """
-        df=self.query_to_df(sql)
-        return df
+    
+
     def cost_by_user(self,start_date="2022-01-01", end_date=""):
         if not end_date:
             today_date = date.today()
@@ -1300,12 +1274,14 @@ class SNFLKQuery():
         """
         df=self.query_to_df(sql)
         return df
-    def credit_by_query(self,start_date="2022-01-01", end_date=""):
+    
+    def credit_by_query_user(self,start_date="2022-01-01", end_date=""):
         df=self.cost_by_user(start_date,end_date)
         df["credit_by_query"]=df["approximate_credits_used"]/df["query_count"]
         return df
     
-    def storage_stage(self,start_date="2022-01-01", end_date=""):
+    
+    def storage_stage_bytes(self,start_date="2022-01-01", end_date=""):
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -1316,6 +1292,7 @@ class SNFLKQuery():
         """
         df=self.query_to_df(sql)
         return df
+    
     
     def default_user_warehouse(self,start_date="2022-01-01", end_date="",n=3):
         if not end_date:
@@ -1334,7 +1311,6 @@ class SNFLKQuery():
         """
         df=self.query_to_df(sql)
         return df
-
 
     def wh_average_queued_load(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH',delta='minute'):
         if not end_date:
@@ -1369,6 +1345,7 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
         return df
 
+    
     def count_of_queries_wh(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH'):
         if not end_date:
             today_date = date.today()
@@ -1386,6 +1363,7 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
         return df
 
+    
     def queries_by_wh(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH'):
         if not end_date:
             today_date = date.today()
