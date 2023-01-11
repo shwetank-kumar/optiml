@@ -587,7 +587,27 @@ class SNFLKQuery():
     ##TODO: 1) Check query 2) Add flag to give unique query text with parameters
     def n_expensive_queries(self, start_date='2022-01-01', end_date='', n=10):
         """
-        Calculates expense of queries over a specific time period
+        Calculates expense of queries over a specific time period.
+        Outputs a dataframe with the following columns:
+        QUERY_TEXT: Text of SQL statement.
+        QUERY_ID: Internal/system-generated identifier for the SQL statement.
+        USER_NAME: User who issued the query.
+        ROLE_NAME: Role that was active in the session at the time of the query.
+        START_TIME: Statement start time.
+        END_TIME: Statement end time.
+        EXECUTION_TIME_MINUTES: execution time of query in minutes.
+        WAREHOUSE_NAME: Warehouse that the query executed on.
+        BYTES_SCANNED: Number of bytes scanned by this statement.
+        PERCENTAGE_SCANNED_FROM_CACHE: The percentage of data scanned from the local disk cache.
+        BYTES_SPILLED_TO_LOCAL_STORAGE: Volume of data spilled to local disk.
+        BYTES_SPILLED_TO_REMOTE_STORAGE: Volume of data spilled to remote disk.
+        PARTITIONS_SCANNED: Number of micro-partitions scanned.
+        PARTITIONS_TOTAL: Total micro-partitions of all tables included in this query.
+        WAREHOUSE_SIZE: Size of the warehouse the queries are executed on.
+        NODES : Node value associated with the warehouse the query is being executed on.
+        COMPILATION_TIME: Compilation time (in seconds).
+        CREDITS: Credits consumed by the query.
+        EXECUTION_STATUS: Execution status for the query. Valid values: success, fail, incident.
         """
         if not end_date:
             today_date = date.today()
@@ -630,13 +650,13 @@ class SNFLKQuery():
                     ,QH.WAREHOUSE_NAME
                     ,QH.EXECUTION_TIME
                     ,QH.WAREHOUSE_SIZE
-                        ,QH.BYTES_SCANNED
-                        ,QH.PERCENTAGE_SCANNED_FROM_CACHE
+                    ,QH.BYTES_SCANNED
+                    ,QH.PERCENTAGE_SCANNED_FROM_CACHE
                     ,QH.BYTES_SPILLED_TO_LOCAL_STORAGE
                     ,QH.BYTES_SPILLED_TO_REMOTE_STORAGE
                     ,QH.PARTITIONS_SCANNED
                     ,QH.PARTITIONS_TOTAL
-                        ,QH.EXECUTION_STATUS
+                    ,QH.EXECUTION_STATUS
                 FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
                 WHERE START_TIME between '{start_date}' and '{end_date}'
             )
@@ -675,6 +695,26 @@ class SNFLKQuery():
     def n_queries_spill_to_storage(self, start_date='2022-01-01', end_date='', n=10):
         """
         Shows queries spilling maximum remote storage
+        Outputs a dataframe with the following columns:
+        QUERY_TEXT: Text of SQL statement.
+        QUERY_TYPE:DML, query, etc. If the query failed, then the query type may be UNKNOWN.
+        QUERY_ID: Internal/system-generated identifier for the SQL statement.
+        USER_NAME: User who issued the query.
+        ROLE_NAME: Role that was active in the session at the time of the query.
+        DATABASE_NAME: Database that was in use at the time of the query
+        SCHEMA_NAME: Schema that was in use at the time of the query
+        EXECUTION_TIME_MINUTES: execution time of query in minutes.
+        WAREHOUSE_NAME: Warehouse that the query executed on.
+        BYTES_SPILLED_TO_LOCAL_STORAGE: Volume of data spilled to local disk.
+        BYTES_SPILLED_TO_REMOTE_STORAGE: Volume of data spilled to remote disk.
+        PARTITIONS_SCANNED: Number of micro-partitions scanned.
+        PARTITIONS_TOTAL: Total micro-partitions of all tables included in this query.
+        WAREHOUSE_SIZE: Size of the warehouse the queries are executed on.
+        CLUSTER_NUMBER: The cluster (in a multi-cluster warehouse) that this statement executed on.
+        COMPILATION_TIME_SEC: Compilation time (in seconds).
+        CREDITS: Credits consumed by the query.
+        EXECUTION_STATUS: Execution status for the query. Valid values: success, fail, incident.
+
         """
         if not end_date:
             today_date = date.today()
@@ -740,6 +780,26 @@ class SNFLKQuery():
     def n_queries_scanned_most_data(self, start_date='2022-01-01',end_date='2022-02-02',n=10):
         """
         Shows queries that scan the most data
+        Outputs a dataframe with the following columns:
+        QUERY_TEXT: Text of SQL statement.
+        QUERY_TYPE:DML, query, etc. If the query failed, then the query type may be UNKNOWN.
+        QUERY_ID: Internal/system-generated identifier for the SQL statement.
+        USER_NAME: User who issued the query.
+        ROLE_NAME: Role that was active in the session at the time of the query.
+        DATABASE_NAME: Database that was in use at the time of the query
+        SCHEMA_NAME: Schema that was in use at the time of the query
+        EXECUTION_TIME_MINUTES: execution time of query in minutes.
+        WAREHOUSE_NAME: Warehouse that the query executed on.
+        BYTES_SPILLED_TO_LOCAL_STORAGE: Volume of data spilled to local disk.
+        BYTES_SPILLED_TO_REMOTE_STORAGE: Volume of data spilled to remote disk.
+        PARTITIONS_SCANNED: Number of micro-partitions scanned.
+        PARTITIONS_TOTAL: Total micro-partitions of all tables included in this query.
+        WAREHOUSE_SIZE: Size of the warehouse the queries are executed on.
+        CLUSTER_NUMBER: The cluster (in a multi-cluster warehouse) that this statement executed on.
+        COMPILATION_TIME_SEC: Compilation time (in seconds).
+        CREDITS: Credits consumed by the query.
+        EXECUTION_STATUS: Execution status for the query. Valid values: success, fail, incident.
+
         """
         
         if not end_date:
@@ -804,6 +864,30 @@ class SNFLKQuery():
     
     ##TODO: Update query output columns to be same as expensive queries
     def n_most_cached_queries(self, start_date='2022-01-01',end_date='', n=10):
+        """
+        Shows the top queries that scanned high percentage of data from cache
+        Outputs a dataframe with the following columns:
+        QUERY_TEXT: Text of SQL statement.
+        QUERY_TYPE:DML, query, etc. If the query failed, then the query type may be UNKNOWN.
+        QUERY_ID: Internal/system-generated identifier for the SQL statement.
+        USER_NAME: User who issued the query.
+        ROLE_NAME: Role that was active in the session at the time of the query.
+        DATABASE_NAME: Database that was in use at the time of the query
+        SCHEMA_NAME: Schema that was in use at the time of the query
+        EXECUTION_TIME_MINUTES: execution time of query in minutes.
+        WAREHOUSE_NAME: Warehouse that the query executed on.
+        BYTES_SPILLED_TO_LOCAL_STORAGE: Volume of data spilled to local disk.
+        BYTES_SPILLED_TO_REMOTE_STORAGE: Volume of data spilled to remote disk.
+        PARTITIONS_SCANNED: Number of micro-partitions scanned.
+        PARTITIONS_TOTAL: Total micro-partitions of all tables included in this query.
+        PERCENTAGE_SCANNED_FROM_CACHE: The percentage of data scanned from the local disk cache.
+        WAREHOUSE_SIZE: Size of the warehouse the queries are executed on.
+        CLUSTER_NUMBER: The cluster (in a multi-cluster warehouse) that this statement executed on.
+        COMPILATION_TIME_SEC: Compilation time (in seconds).
+        CREDITS: Credits consumed by the query.
+        EXECUTION_STATUS: Execution status for the query. Valid values: success, fail, incident.
+
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -863,12 +947,28 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
         return df
     
-    ##TODO: Update query output columns to be same as expensive queries - you cant do query ID since 
-    # you are grouping on counts so everything except that
     ##TODO: Convert this into N most frequently executed Select queries so these can be identified 
     # as targets for creating new tables or materialized views
     
     def n_most_frequently_executed_select_queries(self, start_date='2022-01-01',end_date='', n=10):
+        """
+       Shows the most executed SELECT queries.
+       Outputs a dataframe with the following columns:
+        QUERY_TEXT: Text of SQL statement.
+        QUERY_TYPE:DML, query, etc. If the query failed, then the query type may be UNKNOWN.
+        NUMBER_OF_QUERIES: Number of times the SELECT query is executed.
+        USER_NAME: User who issued the query.
+        EXECUTION_MINUTES: execution time of query in minutes.
+        WAREHOUSE_NAME: Warehouse that the query executed on.
+        BYTES_SPILLED_TO_LOCAL_STORAGE: Volume of data spilled to local disk.
+        BYTES_SPILLED_TO_REMOTE_STORAGE: Volume of data spilled to remote disk.
+        PARTITIONS_SCANNED: Number of micro-partitions scanned.
+        PARTITIONS_TOTAL: Total micro-partitions of all tables included in this query.
+        CLUSTER_NUMBER: The cluster (in a multi-cluster warehouse) that this statement executed on.
+        COMPILATION_TIME_SEC: Compilation time (in seconds).
+        CREDITS: Credits consumed by the query.
+        EXECUTION_STATUS: Execution status for the query. Valid values: success, fail, incident.
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -904,6 +1004,24 @@ class SNFLKQuery():
         return df
 
     def longest_running_queries(self, start_date='2022-01-01',end_date='', n=10):
+        """
+        Shows the queries with the most elapsed time.
+        Outputs a dataframe with the following columns:
+        QUERY_TEXT: Text of SQL statement.
+        QUERY_TYPE:DML, query, etc. If the query failed, then the query type may be UNKNOWN.
+        USER_NAME: User who issued the query.
+        EXECUTION_MINUTES: execution time of query in minutes.
+        WAREHOUSE_NAME: Warehouse that the query executed on.
+        BYTES_SPILLED_TO_LOCAL_STORAGE: Volume of data spilled to local disk.
+        BYTES_SPILLED_TO_REMOTE_STORAGE: Volume of data spilled to remote disk.
+        PARTITIONS_SCANNED: Number of micro-partitions scanned.
+        PARTITIONS_TOTAL: Total micro-partitions of all tables included in this query.
+        CLUSTER_NUMBER: The cluster (in a multi-cluster warehouse) that this statement executed on.
+        COMPILATION_TIME_SEC: Compilation time (in seconds).
+        CREDITS: Credits consumed by the query.
+        EXECUTION_STATUS: Execution status for the query. Valid values: success, fail, incident.
+        
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -935,7 +1053,7 @@ class SNFLKQuery():
             ,QH.USER_NAME
             ,QH.ROLE_NAME
             ,QH.DATABASE_NAME
-            ,QH.SCHEMA_NAME
+     BYTES_SCANNED: Number of bytes scanned by this statement.       ,QH.SCHEMA_NAME
             ,QH.WAREHOUSE_NAME
             ,QH.WAREHOUSE_SIZE
             ,QH.BYTES_SPILLED_TO_LOCAL_STORAGE
@@ -965,6 +1083,9 @@ class SNFLKQuery():
         return df
 
     def caching_warehouse(self, start_date='2022-01-01',end_date='', n=10):
+        """
+        Shows percentage of data scanned from the warehouse cache
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -988,6 +1109,22 @@ class SNFLKQuery():
     ### User queries ---
     
     def idle_users(self, start_date='2022-01-01',end_date=''):
+        """
+        Shows users that have not logged into account during the time period.
+        Outputs a dataframe with the following columns:
+        created_on: Date and time  when the user's account was created
+        deleted_on: Date and time (in the UTC time zone) when the user's account was deleted.
+        login_name: Name that the user enters to log into the system.
+        email: Email address for the user.
+        must_change_password: Specifies whether the user is forced to change their password on their next login.
+        disabled: Specified whether the user account is disabled preventing the user from logging in to the Snowflake and running queries
+        snowflake_lock: Specifies whether a temporary lock has been placed on the user's account.
+        default_role: The role that is active by default for the user's session upon login.
+        last_success_login: Date and time when the user last logged in to the account.
+        locked_until_time: Specifies the number of minutes until the temporary lock on the user login is cleared
+        password_last_set_time: The timestamp on which the last non-null password was set for the user
+
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -1014,6 +1151,21 @@ class SNFLKQuery():
         return df
 
     def users_never_logged_in(self,start_date="2022-02-02", end_date=""):
+        """
+        Shows users that have never logged into their account.
+        Outputs a dataframe with the following columns:
+        created_on: Date and time  when the user's account was created
+        deleted_on: Date and time (in the UTC time zone) when the user's account was deleted.
+        login_name: Name that the user enters to log into the system.
+        email: Email address for the user.
+        must_change_password: Specifies whether the user is forced to change their password on their next login.
+        disabled: Specified whether the user account is disabled preventing the user from logging in to the Snowflake and running queries
+        snowflake_lock: Specifies whether a temporary lock has been placed on the user's account.
+        default_role: The role that is active by default for the user's session upon login.
+        last_success_login: Date and time when the user last logged in to the account.
+        locked_until_time: Specifies the number of minutes until the temporary lock on the user login is cleared
+        password_last_set_time: The timestamp on which the last non-null password was set for the user        
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -1040,6 +1192,12 @@ class SNFLKQuery():
         
     
     def users_full_table_scans(self, start_date='2022-01-01',end_date='',n=10):
+        """
+        Shows users that run the most queries with near full table scans.
+        Outputs a dataframe with the following columns:
+        User_name: User who executed the queries.
+        Count_of_queries: Number of queries executed by the user with near full table scans.
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -1057,7 +1215,12 @@ class SNFLKQuery():
        
         df=self.query_to_df(sql)
         return df
+    
     def queries_full_table_scan(self, start_date='2022-01-01',end_date='',n=10):
+        """
+        Shows the queries with near full table scans
+        Outputs a dataframe with all the columns in ACCOUNT_USAGE.QUERY_HISTORY
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -1077,6 +1240,13 @@ class SNFLKQuery():
 
 
     def heavy_users(self, start_date='2022-01-01',end_date='',n=10):
+        """
+        Shows users who run queries that scan a lot of data.
+        Outputs a dataframe with the following columns:
+        USER_NAME: User who issued the query.
+        WAREHOUSE_NAME: Warehouse the query was issued on.
+        AVG_PCR_SCANNED: Average partitions scanned by the user. 
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -1094,6 +1264,12 @@ class SNFLKQuery():
     
     
     def idle_roles(self,start_date="2022-01-01", end_date=""):
+        """
+        Shows roles that have not been used in the given time period.
+        Outputs a dataframe with the following columns:
+        ROLE_NAME: Role name that has not been used in the time period.
+        
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -1116,6 +1292,10 @@ class SNFLKQuery():
         return df
     
     def failed_tasks(self,start_date="2022-01-01", end_date=""):
+        """
+        Returns list of task executions that have failed.
+        Ouputs all columns of ACCOUNT_USAGE.TASK HISTORY table.
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -1131,6 +1311,12 @@ class SNFLKQuery():
         return df
     
     def long_running_tasks(self,start_date="2022-01-01", end_date=""):
+        """
+        Shows an ordered list of the longest running tasks.
+        Outputs a dataframe with the following columns:
+        DURATION_SECONDS: Number of seconds the task ran.
+        and all columns of ACCOUNT_USAGE.TASK_HISTORY table.
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -1145,8 +1331,9 @@ class SNFLKQuery():
         df=self.query_to_df(sql)
         return df
     
-    # They will show up if they have been accessed
+    #TO-DO: Not able to parse JSON data accurately. Need to fix this query.
     def table_accessed(self,start_date="2022-01-01", end_date=""):
+
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -1161,18 +1348,14 @@ class SNFLKQuery():
         """
         df=self.query_to_df(sql)
         return df
-    def table_streams(self,start_date="2022-01-01", end_date=""):
-        sql="SHOW STREAMS;"
-        cursor=self.connection.cursor()
-        cursor.execute(sql)
-        sql="""
-        select * 
-        from table(result_scan(last_query_id())) 
-        where "stale" = true;
-        """
-        df=self.query_to_df(sql)
-        return df
+    
     def cost_by_user(self,start_date="2022-01-01", end_date=""):
+        """
+        Returns cost by user on a hourly basis.
+        Outputs a dataframe with the following columns:
+        query_count: Number of queries issued by user in that hour.
+        Approximate_credits_used: Credits consumed by user in that hour.
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -1221,12 +1404,19 @@ class SNFLKQuery():
         """
         df=self.query_to_df(sql)
         return df
+    
     def credit_by_query(self,start_date="2022-01-01", end_date=""):
+        """
+        Returns approximate credits utilized by user per query on an hourly basis.
+        """
         df=self.cost_by_user(start_date,end_date)
         df["credit_by_query"]=df["approximate_credits_used"]/df["query_count"]
         return df
     
     def storage_stage(self,start_date="2022-01-01", end_date=""):
+        """
+        Shows the storage usage in bytes for stages within a time period.
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -1239,6 +1429,12 @@ class SNFLKQuery():
         return df
     
     def default_user_warehouse(self,start_date="2022-01-01", end_date="",n=3):
+        """
+        Shows default warehouse assocaited with a user
+        Outputs a dataframe with the following columns:
+        default_role: default role associated with a user
+        default_warehouse: default warehouse associated with a user.
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -1258,6 +1454,13 @@ class SNFLKQuery():
 
 
     def wh_average_queued_load(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH',delta='minute'):
+        """
+        Shows the average queued load value in a given warehouse during a time interval (minute,hour,etc.)
+        Outputs a dataframe with the following columns:
+        Avg_running: Average running load of warehouse in given time interval.
+        Avg_queued_load: Average queued load of warehouse in given time interval.
+        query_count: Number of queries issued in warehouse in time interval.
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
@@ -1308,6 +1511,10 @@ class SNFLKQuery():
         return df
 
     def queries_by_wh(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH'):
+        """
+        Shows queries issued in specific warehouse in given time period.
+
+        """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
