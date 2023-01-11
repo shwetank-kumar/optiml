@@ -332,7 +332,7 @@ class SNFLKQuery():
 
     # @simple_cache
     def cost_of_searchoptimization_ts(self, start_date='2022-01-01', end_date=''):
-        """Calculates thCREDITS_USEDe cost of search optimizations in time series used in a
+        """Calculates the cost of search optimizations in time series used in a
         given time period using Search Optimization History table.
         Outputs a dataframe with the following columns:
         Database name: The database name of the table on which search optimization is applied
