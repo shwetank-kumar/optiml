@@ -3,6 +3,10 @@ from connection import SnowflakeConnConfig
 from datetime import datetime
 import pandas as pd
 from tabulate import tabulate
+import plotly.express as px
+import plotly.graph_objects as go
+color_scheme=["red","blue","green","orange","purple","brown","pink","gray","olive","cyan","darkviolet","goldenrod","darkgreen","chocolate","lawngreen"]
+from plotly.subplots import make_subplots
 from dateutil.relativedelta import relativedelta
 connection = SnowflakeConnConfig(accountname='jg84276.us-central1.gcp',warehousename="XSMALL_WH").create_connection()
 import os
@@ -93,3 +97,32 @@ def usage_category():
     df_by_usage_category = df_by_usage_category.drop(len(df_by_usage_category)-1) 
     df_by_category_ts = df.groupby(['category_name','hourly_start_time']).sum('numeric_only').reset_index()
     return(df_by_usage_category,df_by_category_ts)
+
+def cost_analysis_plots():
+    df_by_usage_category,df_by_category_ts=usage_category()
+    fig1 = make_subplots(
+    rows=1, cols=2,
+    specs=[[{"type": "pie"},{"type": "pie"}]],
+    subplot_titles=("Dollars", "Credits")
+    )
+
+    fig1.add_trace(go.Pie(labels=df_by_usage_category['category_name'].tolist(), values=df_by_usage_category['dollars'].tolist(),name="Dollars", rotation=45, marker_colors=color_scheme),row=1,col=1)
+    fig1.add_trace(go.Pie(labels=df_by_usage_category['category_name'].tolist(), values=df_by_usage_category['credits'].tolist(),name='Credits', rotation=45, marker_colors=color_scheme),row=1,col=2)
+
+    fig1.update_layout(
+        title={
+            'text': "Breakdown of total cost by usage category",
+            'y':0.95,
+            'x':0.5,
+            'xanchor': 'center',
+            'yanchor': 'top'})
+    fig2 = px.area(df_by_category_ts, x="hourly_start_time", y="dollars", color="category_name",color_discrete_sequence=color_scheme)
+    fig2.update_layout(
+    title={
+        'text': "Timeseries of cost by usage category",
+        'y':0.95,
+        'x':0.5,
+        'xanchor': 'center',
+        'yanchor': 'top'})
+    return(fig1,fig2)
+

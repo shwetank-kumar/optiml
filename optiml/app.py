@@ -1,4 +1,5 @@
-import dash
+import dash_auth
+from users import USERNAME_PASSWORD_PAIRS
 import dash_bootstrap_components as dbc
 from dash import Input, Output, dcc, html
 from dash import Dash, html, dcc,dash_table
@@ -15,36 +16,15 @@ color_scheme=["red","blue","green","orange","purple","brown","pink","gray","oliv
 
 
 df_total_usage_cost=com.usage_cost()
-df_by_usage_category,df_by_category_ts=com.usage_category()
+fig1,fig2=com.cost_analysis_plots()
 
 table1=dash_table.DataTable(df_total_usage_cost.to_dict('records'),id="table")
-fig1 = make_subplots(
-rows=1, cols=2,
-specs=[[{"type": "pie"},{"type": "pie"}]],
-subplot_titles=("Dollars", "Credits")
+
+app = Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
+auth = dash_auth.BasicAuth(
+    app,
+    USERNAME_PASSWORD_PAIRS
 )
-
-fig1.add_trace(go.Pie(labels=df_by_usage_category['category_name'].tolist(), values=df_by_usage_category['dollars'].tolist(),name="Dollars", rotation=45, marker_colors=color_scheme),row=1,col=1)
-fig1.add_trace(go.Pie(labels=df_by_usage_category['category_name'].tolist(), values=df_by_usage_category['credits'].tolist(),name='Credits', rotation=45, marker_colors=color_scheme),row=1,col=2)
-
-fig1.update_layout(
-    title={
-        'text': "Breakdown of total cost by usage category",
-        'y':0.95,
-        'x':0.5,
-        'xanchor': 'center',
-        'yanchor': 'top'})
-fig2 = px.area(df_by_category_ts, x="hourly_start_time", y="dollars", color="category_name",color_discrete_sequence=color_scheme)
-fig2.update_layout(
-    title={
-        'text': "Timeseries of cost by usage category",
-        'y':0.95,
-        'x':0.5,
-        'xanchor': 'center',
-        'yanchor': 'top'})
-
-
-app = dash.Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
 
 # the style arguments for the sidebar. We use position:fixed and a fixed width
 SIDEBAR_STYLE = {
