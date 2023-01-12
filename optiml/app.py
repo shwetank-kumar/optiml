@@ -11,15 +11,18 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from tabulate import tabulate
-import dashcommands as com
+import dash_test as com
 color_scheme=["red","blue","green","orange","purple","brown","pink","gray","olive","cyan","darkviolet","goldenrod","darkgreen","chocolate","lawngreen"]
 
 
 df_total_usage_cost=com.usage_cost()
-fig1,fig2=com.cost_analysis_plots()
+fig1,fig2=com.cost_by_usage_plots()
+df_by_user,df_low_usage_users,df_by_user_consolidated,fig3,fig4=com.cost_by_user_plots()
 
 table1=dash_table.DataTable(df_total_usage_cost.to_dict('records'),id="table")
-
+table_users=dash_table.DataTable(df_by_user.to_dict('records'),id="table")
+table_low_usage=dash_table.DataTable(df_low_usage_users.to_dict('records'),id="table")
+table_user_consolidated=dash_table.DataTable(df_by_user_consolidated.to_dict('records'),id="table")
 app = Dash(external_stylesheets=[dbc.themes.BOOTSTRAP])
 auth = dash_auth.BasicAuth(
     app,
@@ -78,7 +81,9 @@ app.layout = html.Div([dcc.Location(id="url"),html.H3(children='Kiva', style={
 def render_page_content(pathname):
 
     if pathname == "/":
-        return[html.H3("Cost by usage"),table1,html.H3("Pie chart credits and dollars"),dcc.Graph(id="graph1", figure=fig1),html.H3("Time series graph"),dcc.Graph(id="graph2", figure=fig2)]
+        return[html.H3("Cost by usage category"),table1,html.H3("Pie chart - cost by usage"),dcc.Graph(id="graph1", figure=fig1),html.H3("Cost by usage -Time series"),dcc.Graph(id="graph2", figure=fig2),
+        html.H3("Cost by user(Current month)"),table_users,html.H3("Low usage users"),table_low_usage,html.H3("Low usage users consolidated"),table_user_consolidated,html.H3("Pie chart -users"),dcc.Graph(id="graph3", figure=fig3),html.H3("Time series- users"),dcc.Graph(id="graph4", figure=fig4)
+        ]
     elif pathname == "/page-1":
         return html.P("This is the content of page 1. Yay!")
     elif pathname == "/page-2":
