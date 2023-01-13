@@ -63,12 +63,6 @@ class SNFLKQuery():
         data_one.columns = data_one.columns.str.lower()
         return data_one
 
-
-    def ts_remove_localization(self, df):
-        df["hourly_start_time"] = [d.tz_localize(None) for d in df["hourly_start_time"]]
-        #df["end_time"] = [d.tz_localize(None) for d in df["end_time"]]
-        return df
-
     ##@simple_cache
     def total_cost_breakdown_ts(self, start_date='2022-01-01', end_date=''):
         """
@@ -146,9 +140,8 @@ class SNFLKQuery():
                 where start_time between '{start_date}' and '{end_date}'
                 order by 4 asc;
         """
-        ## Removing localization on the timestamp so it can bite us in the ass
-        ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
+
+        df = self.query_to_df(sql)
         return df
 
     # @simple_cache
@@ -185,9 +178,8 @@ class SNFLKQuery():
         group by 1,2,3,6
         order by 6 desc;
         """
-        ## Removing localization on the timestamp so it can bite us in the ass
-        ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
+        
+        df = self.query_to_df(sql)
         return df
 
     # @simple_cache
@@ -219,9 +211,7 @@ class SNFLKQuery():
         from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH where WMH.START_TIME between '{start_date}' and '{end_date}' order by 4 asc;
         """
 
-        ## Removing localization on the timestamp so it can bite us in the ass
-        ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
+        df = self.query_to_df(sql)
         return df
 
     # @simple_cache
@@ -251,9 +241,8 @@ class SNFLKQuery():
          from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH
          where WMH.START_TIME between '{start_date}' and '{end_date}' order by 4 asc;      
         """
-        ## Removing localization on the timestamp so it can bite us in the ass
-        ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
+        
+        df = self.query_to_df(sql)
         return df
 
     # @simple_cache
@@ -290,9 +279,8 @@ class SNFLKQuery():
         where start_time between '{start_date}' and '{end_date}'
         order by 6 desc;
         """
-        ## Removing localization on the timestamp so it can bite us in the ass
-        ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
+        
+        df = self.query_to_df(sql)
         return df
 
     # @simple_cache
@@ -325,9 +313,7 @@ class SNFLKQuery():
         order by 4 desc;
         """
 
-        ## Removing localization on the timestamp so it can bite us in the ass
-        ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
+        df = self.query_to_df(sql)
         return df
 
     # @simple_cache
@@ -361,9 +347,7 @@ class SNFLKQuery():
         where start_time between '{start_date}' and '{end_date}'
         order by 6 desc;"""
 
-        ## Removing localization on the timestamp so it can bite us in the ass
-        ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
+        df = self.query_to_df(sql)
         return df
 
     # @simple_cache
@@ -396,9 +380,8 @@ class SNFLKQuery():
           where start_time between '{start_date}' and '{end_date}'
           order by 1 desc;
         """
-        ## Removing localization on the timestamp so it can bite us in the ass
-        ## later
-        df = self.ts_remove_localization(self.query_to_df(sql))
+        
+        df = self.query_to_df(sql)
         return df
 
     # @simple_cache
@@ -415,19 +398,21 @@ class SNFLKQuery():
             today_date = date.today()
             end_date = str(today_date)
         sql = f"""
-        select cost.category_name, cost.USAGE_DATE as start_time, cost.DOLLARS_USED as dollars, 'Snowflake' as user_name, 0 as credits from (
-        SELECT
-
-                'Storage' as category_name
-                ,SU.USAGE_DATE
-
-
-                ,((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23)/DA.DAYS_IN_MONTH as DOLLARS_USED
-        from    {self.dbname}.ACCOUNT_USAGE.STORAGE_USAGE SU
-        JOIN    (SELECT COUNT(*) AS DAYS_IN_MONTH,TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01') as DATE_MONTH
-        FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM
-        GROUP BY TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01')) DA
-        ON DA.DATE_MONTH = TO_DATE(DATE_PART('year',USAGE_DATE)||'-'||DATE_PART('month',USAGE_DATE)||'-01')) as cost
+        select 
+            cost.category_name
+            ,cost.USAGE_DATE::timestamp_ltz as start_time
+            ,cost.DOLLARS_USED as dollars
+            ,'Snowflake' as user_name
+            ,0 as credits from (
+            select
+                    'Storage' as category_name
+                    ,SU.USAGE_DATE
+                    ,((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23)/DA.DAYS_IN_MONTH as DOLLARS_USED
+            from    {self.dbname}.ACCOUNT_USAGE.STORAGE_USAGE SU
+            JOIN    (SELECT COUNT(*) AS DAYS_IN_MONTH,TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01') as DATE_MONTH
+            FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM
+            GROUP BY TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01')) DA
+            ON DA.DATE_MONTH = TO_DATE(DATE_PART('year',USAGE_DATE)||'-'||DATE_PART('month',USAGE_DATE)||'-01')) as cost
         where cost.usage_date between '{start_date}' and '{end_date}' group by 1, 2, 3 order by 2 asc;
         """
         df = self.query_to_df(sql)
@@ -494,10 +479,7 @@ class SNFLKQuery():
             ORDER BY 3 DESC
             ;
         """
-        ## Removing localization on the timestamp so it can bite us in the ass
-        ## later
-        # df = self.ts_remove_localization(self.query_to_df(sql))
-        df = self.ts_remove_localization(self.query_to_df(sql))
+        df = self.query_to_df(sql)
         return df
 
     
@@ -520,7 +502,7 @@ class SNFLKQuery():
             WITH CLIENT_HOUR_EXECUTION_CTE AS (
                 SELECT  CASE
                     WHEN CLIENT_APPLICATION_ID LIKE '.NET %' THEN '.NET'
-                    WHEN CLIENT_APPLICATION_ID LIKE 'Javascript %' THEN 'Javascript'
+                    WHEN CLIENT_APPLICATION_ID LIKE 'JavaScript %' THEN 'Javascript'
                     WHEN CLIENT_APPLICATION_ID LIKE 'Go %' THEN 'Go'
                     WHEN CLIENT_APPLICATION_ID LIKE 'Snowflake UI %' THEN 'Snowflake UI'
                     WHEN CLIENT_APPLICATION_ID LIKE 'SnowSQL %' THEN 'SnowSQL'
@@ -569,10 +551,8 @@ class SNFLKQuery():
             ORDER BY 3 DESC
             ;
         """
-        ## Removing localization on the timestamp so it can bite us in the ass
-        ## later
-        # df = self.ts_remove_localization(self.query_to_df(sql))
-        df = self.ts_remove_localization(self.query_to_df(sql))
+
+        df = self.query_to_df(sql)
         return df
 
     ## Config related queries
