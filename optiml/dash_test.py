@@ -12,6 +12,7 @@ connection = SnowflakeConnConfig(accountname='jg84276.us-central1.gcp',warehouse
 import os
 cache_dir = os.path.expanduser('~/data/kiva')
 from queries import SNFLKQuery
+import numpy as np
 qlib = SNFLKQuery(connection, 'KIV', cache_dir)
 sdate = '2022-09-12'
 edate = '2022-10-12'
@@ -46,6 +47,28 @@ def current_month_cost():
     df_by_usage_category.rename(columns={'category_name': 'Cost category', 'credits': 'Current month credits','dollars':'Current month dollars'}, inplace=True)
     return(df_current,df_by_usage_category)
 
+def stats():
+    df = qlib.total_cost_breakdown_ts(sdate, edate)
+    df_by_category_ts = df.groupby(['category_name','hourly_start_time']).sum('numeric_only').reset_index()
+    df_compute = df_by_category_ts[df_by_category_ts["category_name"] == "Compute"].round(2)
+    avg_consumption = df_compute.mean().round(2)
+    avg_consumption = pd.DataFrame({'Category':avg_consumption.index, 'Average Consumption':avg_consumption.values})
+    avg_consumption.loc[-1] = ['hourly consumption', np.nan]  # adding a row
+    avg_consumption.index = avg_consumption.index + 1  # shifting index
+    avg_consumption = avg_consumption.sort_index() 
+    avg_consumption = avg_consumption.drop('Category', axis=1)
+    max_consumption = df_compute.loc[df_compute['credits'].idxmax()]
+    max_consumption.drop("category_name", inplace=True)
+    max_consumption = pd.DataFrame({'Category':max_consumption.index, 'Max consumption':max_consumption.values})
+    max_consumption = max_consumption.drop('Category', axis=1)
+    min_consumption = df_compute.loc[df_compute['credits'].idxmin()]
+    min_consumption.drop("category_name", inplace=True)
+    min_consumption = pd.DataFrame({'Category':min_consumption.index, 'Min consumption':min_consumption.values})
+    stats=pd.concat([min_consumption, max_consumption,avg_consumption], axis=1)
+    stats.head()
+    return(stats)
+
+
 def percentage_change():
     df_prev1,df_prev2=previous_month_cost()
     df_current1,df_current2=current_month_cost()
@@ -60,7 +83,7 @@ def usage_cost():
     df_change=percentage_change()
     df_current2=df_current2.iloc[: , 1:]
     df_change=df_change.iloc[: , 1:]
-    df_all=pd. concat([df_prev1, df_current2, df_change], axis=1)
+    df_all=pd. concat([df_prev2, df_current2, df_change], axis=1)
     return(df_all)
 def usage_category():
     df=qlib.total_cost_breakdown_ts(sdate,edate)
@@ -104,8 +127,8 @@ def cost_by_usage_plots():
 def cost_by_user_plots():
     df = qlib.cost_by_user_ts(sdate, edate)
     df_by_user = df.groupby(['user_name']).sum('numeric_only').reset_index()
-    df_by_user = df_by_user.round(2)
     df_by_user.loc[len(df_by_user.index)] = ['Total', df_by_user['approximate_credits_used'].sum()]
+    df_by_user = df_by_user.round(2)
     df_by_user["percent_usage"] = df_by_user["approximate_credits_used"]/df_by_user[df_by_user["user_name"]=="Total"]["approximate_credits_used"].values[0]*100
     df_by_user["percent_usage"] = df_by_user["percent_usage"].round(3)
     x = df_by_user.loc[df_by_user["percent_usage"]<1.00].sum(axis=0,numeric_only=True)
@@ -139,7 +162,76 @@ def cost_by_user_plots():
     return(df_by_user,df_low_usage_users,df_by_user_consolidated,fig1,fig2)
 
 
-df_by_user,df_low_usage_users,df_by_user_consolidated,fig1,fig2=cost_by_user_plots()
-fig2.show()
+def cost_by_warehouse_plots():
+    df = qlib.cost_by_wh_ts(sdate, edate)
+    df_by_wh = df.groupby(['warehouse_name']).sum('numeric_only').reset_index()
+    df_by_wh=df_by_wh.round(2)
+    df_by_wh_table = df_by_wh
+    df_by_wh_table.loc[len(df.index)] = ['Total', df_by_wh_table['credits'].sum(), df_by_wh_table['dollars'].sum(),  df_by_wh_table['cloud_services_credits'].sum(), df_by_wh_table['cloud_services_dollars'].sum()]
+    
+
+    fig1 = make_subplots(
+        rows=1, cols=1,
+        specs=[[{"type": "pie"}]],
+    )
+
+    fig1.add_trace(go.Pie(labels=df_by_wh['warehouse_name'].tolist(), values=df_by_wh['dollars'].tolist(),name='dollars',marker_colors=color_scheme),row=1,col=1)
+
+    fig1.update_layout(
+        title={
+            'text': "Breakdown of total cost by warehouse",
+            'y':0.1,
+            'x':0.5,
+            'xanchor': 'center',
+            'yanchor': 'top'})
+    df_by_wh_ts = df.groupby(['warehouse_name','hourly_start_time']).sum('numeric_only').reset_index()
+    fig2 = px.area(df_by_wh_ts, x="hourly_start_time", y="credits", color="warehouse_name",color_discrete_sequence=color_scheme)
+    return(df_by_wh_table,fig1,fig2)
+
+def cost_by_pt():
+    df=qlib.cost_by_partner_tool_ts(sdate, edate)
+    df_by_pt = df.groupby(['client_application_name']).sum('numeric_only').reset_index()
+    df_by_pt_table=df_by_pt
+    df_by_pt_table.loc[len(df_by_pt_table.index)] = ['Total', df_by_pt_table['approximate_credits_used'].sum()]
+    df_by_pt_table = df_by_pt_table.round(2)
+
+    fig1 = make_subplots(
+    rows=1, cols=1,
+    specs=[[{"type": "pie"}]],
+)
+
+    fig1.add_trace(go.Pie(labels=df_by_pt['client_application_name'].tolist(), values=df_by_pt['approximate_credits_used'].tolist(),name='credits',marker_colors=color_scheme, rotation=45),row=1,col=1)
+
+    fig1.update_layout(
+        title={
+            'text': "Breakdown of total cost by partner tools",
+            'y':0.1,
+            'x':0.5,
+            'xanchor': 'center',
+            'yanchor': 'top'})
+    df_by_pt_ts = df.groupby(['client_application_name','hourly_start_time']).sum('numeric_only').reset_index()
+    fig2 = px.area(df_by_pt_ts, x="hourly_start_time", y="approximate_credits_used", color="client_application_name",color_discrete_sequence=color_scheme)
+    df_titles=sorted(df["warehouse_name"].unique())
+    df_warehouse = [d for _, d in df.groupby(['warehouse_name'])]
+    fig3=[]
+    for i in range(len(df_warehouse)):
+        fig3.append(px.area(df_warehouse[i], x="hourly_start_time", y="approximate_credits_used", color="client_application_name",color_discrete_sequence=color_scheme,title=df_titles[i]))
+    return(df_by_pt_table,fig1,fig2,fig3)
+
+
+
+# def cost_by_pt_plots():
+#     df=qlib.cost_by_partner_tool_ts(sdate, edate)
+#     df_by_pt = df.groupby(['client_application_name']).sum('numeric_only').reset_index()
+#     df_by_pt = df_by_pt.round(2)
+#     df_by_pt.loc[len(df.index)] = ['Total', df_by_pt['approximate_credits_used'].sum()]
+#     df_
+
+
+
+
+
+
+
 
         
