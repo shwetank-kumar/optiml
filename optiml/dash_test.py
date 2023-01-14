@@ -18,6 +18,7 @@ sdate = '2022-09-12'
 edate = '2022-10-12'
 print(f"The analysis is carried our for date range {sdate} to {edate}")
 
+# ---- Cost analysis plots----------------------
 
 def get_previous_dates(sdate, edate, date_shift_months):
     sdate_datetime = datetime.strptime(sdate,'%Y-%m-%d')
@@ -51,7 +52,7 @@ def stats():
     df = qlib.total_cost_breakdown_ts(sdate, edate)
     df_by_category_ts = df.groupby(['category_name','hourly_start_time']).sum('numeric_only').reset_index()
     df_compute = df_by_category_ts[df_by_category_ts["category_name"] == "Compute"].round(2)
-    avg_consumption = df_compute.mean().round(2)
+    avg_consumption = df_compute.mean(numeric_only=True).round(2)
     avg_consumption = pd.DataFrame({'Category':avg_consumption.index, 'Average Consumption':avg_consumption.values})
     avg_consumption.loc[-1] = ['hourly consumption', np.nan]  # adding a row
     avg_consumption.index = avg_consumption.index + 1  # shifting index
@@ -218,14 +219,13 @@ def cost_by_pt():
         fig3.append(px.area(df_warehouse[i], x="hourly_start_time", y="approximate_credits_used", color="client_application_name",color_discrete_sequence=color_scheme,title=df_titles[i]))
     return(df_by_pt_table,fig1,fig2,fig3)
 
+# --------- Query Analysis plots------------------------
+def expensive_queries():
+    df = qlib.n_expensive_queries(sdate,edate,200)
+    return(df)
 
 
-# def cost_by_pt_plots():
-#     df=qlib.cost_by_partner_tool_ts(sdate, edate)
-#     df_by_pt = df.groupby(['client_application_name']).sum('numeric_only').reset_index()
-#     df_by_pt = df_by_pt.round(2)
-#     df_by_pt.loc[len(df.index)] = ['Total', df_by_pt['approximate_credits_used'].sum()]
-#     df_
+
 
 
 
