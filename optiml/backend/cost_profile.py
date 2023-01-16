@@ -1,6 +1,19 @@
 from .snflk import SNFLKQuery
 import pandas as pd
-from datetime import date
+# Initialize analysis dates
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+
+## Function for date time analysis
+##TODO: Move to a library function
+def get_previous_dates(sdate, edate, date_shift_months):
+    sdate_datetime = datetime.strptime(sdate,'%Y-%m-%d')
+    prev_sdates_datetime = datetime.strptime(sdate,'%Y-%m-%d') - relativedelta(months=date_shift_months)
+    prev_sdates = prev_sdates_datetime.strftime("%Y-%m-%d")
+    edate_datetime = datetime.strptime(edate,'%Y-%m-%d')
+    prev_edates_datetime = datetime.strptime(edate,'%Y-%m-%d') - relativedelta(months=date_shift_months)
+    prev_edates = prev_edates_datetime.strftime("%Y-%m-%d")
+    return prev_sdates, prev_edates
 
 class CostProfile(SNFLKQuery):
 
