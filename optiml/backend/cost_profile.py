@@ -1,7 +1,7 @@
 from .snflk import SNFLKQuery
 import pandas as pd
 # Initialize analysis dates
-from datetime import datetime
+from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 
 ## Function for date time analysis
