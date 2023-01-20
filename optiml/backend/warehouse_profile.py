@@ -91,3 +91,39 @@ class WarehouseProfile(SNFLKQuery):
         return df
 
 
+    
+    def wh_credits(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH',delta='minute'):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql=f"""
+            WITH wlh as (
+        SELECT DATE_TRUNC('{delta}', wl.start_time) start_time_truncated,
+        AVG(avg_running) avg_running, AVG(avg_queued_load) avg_queued_load 
+        FROM {self.dbname}.account_usage.warehouse_load_history wl
+        WHERE DATE_TRUNC('DAY', wl.start_time) between'{start_date}' and '{end_date}'
+        AND wl.warehouse_name = '{wh_name}'
+        GROUP BY  start_time_truncated
+        ORDER BY start_time_truncated asc
+        ),
+        wmh AS (SELECT DATE_TRUNC('{delta}', wm.start_time) start_time_truncated, credits_used
+           FROM {self.dbname}.account_usage.warehouse_metering_history wm
+          WHERE DATE_TRUNC('day', wm.start_time) between '{start_date}' and '{end_date}'
+            AND wm.warehouse_name = '{wh_name}'
+            
+        ORDER BY start_time_truncated ASC)
+        SELECT wlh.*, wmh.credits_used
+        FROM   wlh, wmh
+        WHERE  wlh.start_time_truncated = wmh.start_time_truncated
+                
+        """
+        df=self.query_to_df(sql)
+        return df
+
+
+
+
+
+
+
+
