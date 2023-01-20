@@ -33,7 +33,24 @@ class WarehouseProfile(SNFLKQuery):
         df=self.query_to_df(sql)
         return df
 
-    def wh_average_queued_load(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH',delta='minute'):
+    def count_of_queries_wh(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH'):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql=f"""
+        SELECT COUNT(*) AS QUERY_COUNT,
+        WAREHOUSE_NAME,
+        date_trunc('hour', start_time) as hourly_start_time
+        from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY
+        where warehouse_name='{wh_name}'
+        and start_time between '{start_date}' and '{end_date}'
+        group by warehouse_name,hourly_start_time
+        order by hourly_start_time ASC
+        """
+        df=self.query_to_df(sql)
+        return df
+
+    def wh_queued_load_ts(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH',delta='minute'):
         """
         Shows the average queued load value in a given warehouse during a time interval (minute,hour,etc.)
         Outputs a dataframe with the following columns:
@@ -73,20 +90,4 @@ class WarehouseProfile(SNFLKQuery):
         df=self.query_to_df(sql)
         return df
 
-    def count_of_queries_wh(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH'):
-        if not end_date:
-            today_date = date.today()
-            end_date = str(today_date)
-        sql=f"""
-        SELECT COUNT(*) AS QUERY_COUNT,
-        WAREHOUSE_NAME,
-        date_trunc('hour', start_time) as hourly_start_time
-        from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY
-        where warehouse_name='{wh_name}'
-        and start_time between '{start_date}' and '{end_date}'
-        group by warehouse_name,hourly_start_time
-        order by hourly_start_time ASC
-        """
-        df=self.query_to_df(sql)
-        return df
 
