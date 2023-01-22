@@ -89,8 +89,6 @@ class WarehouseProfile(SNFLKQuery):
         """
         df=self.query_to_df(sql)
         return df
-
-
     
     def wh_credits(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH',delta='minute'):
         if not end_date:
