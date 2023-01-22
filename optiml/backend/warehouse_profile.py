@@ -205,7 +205,7 @@ class WarehouseProfile(SNFLKQuery):
         """
         df=self.query_to_df(sql)
         return df
-
+# TODO: Query takes time to run for large date ranges 
     def wh_query_load(self,start_date="2022-01-01", end_date="",delta='hour',wh_name='DEV_WH',n=2):
         if not end_date:
             today_date = date.today()
