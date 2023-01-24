@@ -49,7 +49,6 @@ class CostProfile(SNFLKQuery):
         compute_df = self.cost_of_compute_ts(start_date, end_date)
         cloud_service_df = self.cost_of_cloud_services_ts(start_date, end_date)
         material_df = self.cost_of_materialized_views_ts(start_date, end_date)
-
         replication_df = self.cost_of_replication_ts(start_date, end_date)
         searchopt_df = self.cost_of_searchoptimization_ts(start_date, end_date)
         snowpipe_df = self.cost_of_snowpipe_ts(start_date, end_date)
@@ -92,7 +91,7 @@ class CostProfile(SNFLKQuery):
                       ,({credit_val}*credits_used_cloud_services) as cloud_services_dollars
                       ,date_trunc('hour', start_time) as hourly_start_time
                 from {self.dbname}.account_usage.warehouse_metering_history
-                where start_time between '{start_date}' and '{end_date}'
+                where DATE_TRUNC('day', start_time) between '{start_date}' and '{end_date}'
                 order by 4 asc;
         """
 
@@ -129,7 +128,7 @@ class CostProfile(SNFLKQuery):
               ,'Autoclustering' as category_name
 
         from {self.dbname}.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY
-        where start_time between '{start_date}' and '{end_date}'
+        where DATE_TRUNC('day', start_time) between '{start_date}' and '{end_date}'
         group by 1,2,3,6
         order by 6 desc;
         """
@@ -163,7 +162,9 @@ class CostProfile(SNFLKQuery):
                 ,date_trunc('hour',WMH.start_time) as hourly_start_time
                 ,'Cloud services' as category_name
 
-        from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH where WMH.START_TIME between '{start_date}' and '{end_date}' order by 4 asc;
+        from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH 
+        where DATE_TRUNC('day', wmh.start_time) between '{start_date}' and '{end_date}'
+        order by 4 asc;
         """
 
         df = self.query_to_df(sql)
@@ -194,7 +195,8 @@ class CostProfile(SNFLKQuery):
             ,date_trunc('hour', WMH.start_time) as hourly_start_time
             ,'Compute' as category_name
          from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH
-         where WMH.START_TIME between '{start_date}' and '{end_date}' order by 4 asc;      
+         where DATE_TRUNC('day', wmh.start_time) between '{start_date}' and '{end_date}'
+         order by 4 asc;      
         """
         
         df = self.query_to_df(sql)
@@ -231,7 +233,7 @@ class CostProfile(SNFLKQuery):
             ,date_trunc('hour', start_time) as hourly_start_time
             ,'Materialized views' as category_name
         from {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY
-        where start_time between '{start_date}' and '{end_date}'
+        where DATE_TRUNC('day', start_time) between '{start_date}' and '{end_date}'
         order by 6 desc;
         """
         
@@ -264,7 +266,7 @@ class CostProfile(SNFLKQuery):
             ,date_trunc('hour', start_time) as hourly_start_time
             ,'Replication' as category_name
         from {self.dbname}.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY
-        where start_time between '{start_date}' and '{end_date}'
+        where DATE_TRUNC('day', start_time) between '{start_date}' and '{end_date}'
         order by 4 desc;
         """
 
@@ -299,7 +301,7 @@ class CostProfile(SNFLKQuery):
             ,'Snowflake' as user_name
             ,'Search optimization' as category_name
         from {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY
-        where start_time between '{start_date}' and '{end_date}'
+        where DATE_TRUNC('day', start_time) between '{start_date}' and '{end_date}'
         order by 6 desc;"""
 
         df = self.query_to_df(sql)
@@ -332,7 +334,7 @@ class CostProfile(SNFLKQuery):
             ,({credit_val}*credits) as dollars
             ,'Snowpipe' as category_name
           from {self.dbname}.ACCOUNT_USAGE.PIPE_USAGE_HISTORY
-          where start_time between '{start_date}' and '{end_date}'
+          where DATE_TRUNC('day', start_time) between '{start_date}' and '{end_date}'
           order by 1 desc;
         """
         
@@ -368,7 +370,8 @@ class CostProfile(SNFLKQuery):
             FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM
             GROUP BY TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01')) DA
             ON DA.DATE_MONTH = TO_DATE(DATE_PART('year',USAGE_DATE)||'-'||DATE_PART('month',USAGE_DATE)||'-01')) as cost
-        where cost.usage_date between '{start_date}' and '{end_date}' group by 1, 2, 3 order by 2 asc;
+        where DATE_TRUNC('day', cost.usage_date) between '{start_date}' and '{end_date}'
+        group by 1, 2, 3 order by 2 asc;
         """
         df = self.query_to_df(sql)
         # Returns an unlocalized time
@@ -403,7 +406,7 @@ class CostProfile(SNFLKQuery):
                 AND EXECUTION_TIME > 0
             
             --Change the below filter if you want to look at a longer range than the last 1 month 
-                AND START_TIME  between '{start_date}' and '{end_date}'
+                AND DATE_TRUNC('day', start_time) between '{start_date}' and '{end_date}'
                 group by 1,2,3
                 )
             , HOUR_EXECUTION_CTE AS (
@@ -475,7 +478,7 @@ class CostProfile(SNFLKQuery):
                 AND EXECUTION_TIME > 0
             
             --Change the below filter if you want to look at a longer range than the last 1 month 
-                AND START_TIME  between '{start_date}' and '{end_date}'
+                AND DATE_TRUNC('day', start_time) between '{start_date}' and '{end_date}'
                 group by 1,2,3
                 )
             , HOUR_EXECUTION_CTE AS (
