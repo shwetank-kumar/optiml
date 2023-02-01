@@ -278,4 +278,82 @@ class QueryProfile(SNFLKQuery):
         """
         df = self.query_to_df(sql)
         return df
+    def get_queries(self, **kwargs):
+        sql=str()
+        defaultKwargs = { 
+                'start_date': '', 
+                'end_date': '', 
+                'user': None, 
+                'wh': None,
+                'es': None
+             }
+        kwargs = { **defaultKwargs, **kwargs }
+        if kwargs['wh']!=None and kwargs['user']!=None and kwargs['es']!=None:
+            sql = f"""
+                select query_id ,warehouse_name,user_name,execution_status
+                from {self.dbname}.account_usage.query_history qh
+                where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
+                and qh.warehouse_name='{kwargs['wh']}' and qh.user_name='{kwargs['user']}'
+                and qh.execution_status='{kwargs['es']}'
+                limit 10;
+            """
+        if kwargs['wh']!=None and kwargs['user']==None and kwargs['es']!=None:
+            sql = f"""
+                select query_id ,warehouse_name,user_name,execution_status
+                from {self.dbname}.account_usage.query_history qh
+                where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
+                and qh.warehouse_name='{kwargs['wh']}' and qh.execution_status='{kwargs['es']}'
+                limit 10;
+            """
+        if kwargs['wh']!=None and kwargs['user']!=None and kwargs['es']==None:
+            sql = f"""
+                select query_id ,warehouse_name,user_name,execution_status
+                from {self.dbname}.account_usage.query_history qh
+                where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
+                and qh.warehouse_name='{kwargs['wh']}' and qh.user_name='{kwargs['user']}'
+                limit 10;
+            """
+        if kwargs['wh']==None and kwargs['user']!=None and kwargs['es']!=None:
+            sql = f"""
+                select query_id ,warehouse_name,user_name,execution_status
+                from {self.dbname}.account_usage.query_history qh
+                where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
+                and qh.execution_status='{kwargs['es']}' and qh.user_name='{kwargs['user']}'
+                limit 10;
+            """
+        if kwargs['wh']!=None and kwargs['user']==None and kwargs['es']!=None:
+              sql = f"""
+                select query_id ,warehouse_name,user_name,execution_status
+                from {self.dbname}.account_usage.query_history qh
+                where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
+                and qh.execution_status='{kwargs['es']}' and qh.warehouse_name='{kwargs['wh']}'
+                limit 10;
+            """
+        if kwargs['wh']!=None and kwargs['user']==None and kwargs['es']==None:
+             sql = f"""
+                select query_id ,warehouse_name,user_name,execution_status
+                from {self.dbname}.account_usage.query_history qh
+                where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
+                and qh.warehouse_name='{kwargs['wh']}'
+                limit 10;
+            """
+        if kwargs['wh']==None and kwargs['user']!=None and kwargs['es']==None:
+             sql = f"""
+                select query_id ,warehouse_name,user_name,execution_status
+                from {self.dbname}.account_usage.query_history qh
+                where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
+                and qh.user_name='{kwargs['user']}'
+                limit 10;
+            """
+        if kwargs['wh']==None and kwargs['user']==None and kwargs['es']!=None:
+             sql = f"""
+                select query_id ,warehouse_name,user_name,execution_status
+                from {self.dbname}.account_usage.query_history qh
+                where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
+                and qh.execution_status='{kwargs['es']}'
+                limit 10;
+            """
+
+        df = self.query_to_df(sql)
+        return df
 
