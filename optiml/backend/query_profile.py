@@ -1,34 +1,40 @@
 from .snflk import SNFLKQuery
 from datetime import date
 import hashlib
-
-def get_query_hash(txt):
-    hash_object = hashlib.md5(txt)
-    return hash_object
-
-def get_unique_query(df):
-    queries = df["query_text"].values.tolist()
-    query_hashes = [get_query_hash(q.encode()).hexdigest() for q in queries]
-    df["query_hash"] = query_hashes
-    return df
+import pandas as pd
 
 class QueryProfile(SNFLKQuery):
 
+    def _append_query_hash(self, df):
+        queries = df["query_text"].values.tolist()
+        query_hashes = [hashlib.md5(q.encode()).hexdigest() for q in queries]
+        df["query_hash"] = query_hashes
+        return df
+
+    def _aggregation(self, x):
+        y = list(set(x))
+        if len(y) == 1:
+            y=y[0]
+
+        return y
+
+    def get_unique_queries(self, df, metric):
+        df = self._append_query_hash(df)
+        df1 = pd.DataFrame()
+        df1 = df.groupby(['query_hash']).agg({
+                metric:'mean',
+                'credits':'sum',
+                'n_success': 'sum',
+                'n_fail': 'sum',
+                'query_id':lambda x:list(x)}).reset_index()
+        df1.rename(columns={metric: "avg_" + metric, "credits": "total_credits"}, inplace=True)
+        df1.sort_values("total_credits", inplace=True, ascending=False)
+        df1.reset_index(inplace=True, drop=True)
+        return df1
+
     def n_inefficient_queries(self, start_date='', end_date='', n=10, metric='credits', unique=False):
         """Inefficient queries as order by metric. Metric options:
-            bytes_scanned,
-            percentage_scanned_from_cache,
-            bytes_spilled_to_local_storage,
-            bytes_spilled_to_remote_storage,
-            percentage_partitions_scanned,
-            partitions_total,
             total_time_elapsed_sec,
-            compilation_time_sec,
-            execution_time_sec,
-            queued_provisioning_time_sec,
-            queued_repair_time_sec,
-            queued_overload_time_sec,
-            list_external_files_time_sec,
             credits
         """
         
@@ -92,460 +98,54 @@ class QueryProfile(SNFLKQuery):
             round((qh.execution_time/(1000*60*60))*ws.nodes,2) as credits
 
         from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
-        JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
-        WHERE START_TIME between '{start_date}' and '{end_date}'
+        join WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
+        where date_trunc('day', qh.start_time) between '{start_date}' and '{end_date}'
         order by {metric} desc
-        LIMIT {n}   
+        limit {n}   
         """
         df = self.query_to_df(sql)
+        df["n_success"] = (df["execution_status"] == "SUCCESS").astype(int)
+        df["n_fail"] = (df["execution_status"] == "FAIL").astype(int)
         return df
 
-    ## Query cost related queries
-    ##TODO: 1) Check query 2) Add flag to give unique query text with parameters
-    # def n_expensive_queries(self, start_date='2022-01-01', end_date='', n=10):
-    #     """
-    #     Calculates expense of queries over a specific time period.
-    #     Outputs a dataframe with the following columns:
-    #     QUERY_TEXT: Text of SQL statement.
-    #     QUERY_ID: Internal/system-generated identifier for the SQL statement.
-    #     USER_NAME: User who issued the query.
-    #     ROLE_NAME: Role that was active in the session at the time of the query.
-    #     START_TIME: Statement start time.
-    #     END_TIME: Statement end time.
-    #     EXECUTION_TIME_MINUTES: execution time of query in minutes.
-    #     WAREHOUSE_NAME: Warehouse that the query executed on.
-    #     BYTES_SCANNED: Number of bytes scanned by this statement.
-    #     PERCENTAGE_SCANNED_FROM_CACHE: The percentage of data scanned from the local disk cache.
-    #     BYTES_SPILLED_TO_LOCAL_STORAGE: Volume of data spilled to local disk.
-    #     BYTES_SPILLED_TO_REMOTE_STORAGE: Volume of data spilled to remote disk.
-    #     PARTITIONS_SCANNED: Number of micro-partitions scanned.
-    #     PARTITIONS_TOTAL: Total micro-partitions of all tables included in this query.
-    #     WAREHOUSE_SIZE: Size of the warehouse the queries are executed on.
-    #     NODES : Node value associated with the warehouse the query is being executed on.
-    #     COMPILATION_TIME: Compilation time (in seconds).
-    #     CREDITS: Credits consumed by the query.
-    #     EXECUTION_STATUS: Execution status for the query. Valid values: success, fail, incident.
-    #     """
-    #     if not end_date:
-    #         today_date = date.today()
-    #         end_date = str(today_date)
-    #     credit_val = ''
-    #     if self.credit_value:
-    #         credit_val = SNFLKQuery.credit_values[self.credit_value]
+
+    def queries_by_execution_status(self, start_date='', end_date=''):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
         
-    #     sql = f"""
-    #         WITH WAREHOUSE_SIZE AS
-    #         (
-    #             SELECT WAREHOUSE_SIZE, NODES
-    #             FROM (
-    #                     SELECT 'XSMALL' AS WAREHOUSE_SIZE, 1 AS NODES
-    #                     UNION ALL
-    #                     SELECT 'SMALL' AS WAREHOUSE_SIZE, 2 AS NODES
-    #                     UNION ALL
-    #                     SELECT 'MEDIUM' AS WAREHOUSE_SIZE, 4 AS NODES
-    #                     UNION ALL
-    #                     SELECT 'LARGE' AS WAREHOUSE_SIZE, 8 AS NODES
-    #                     UNION ALL
-    #                     SELECT 'XLARGE' AS WAREHOUSE_SIZE, 16 AS NODES
-    #                     UNION ALL
-    #                     SELECT '2XLARGE' AS WAREHOUSE_SIZE, 32 AS NODES
-    #                     UNION ALL
-    #                     SELECT '3XLARGE' AS WAREHOUSE_SIZE, 64 AS NODES
-    #                     UNION ALL
-    #                     SELECT '4XLARGE' AS WAREHOUSE_SIZE, 128 AS NODES
-    #                     )
-    #         ),
-    #         QUERY_HISTORY AS
-    #         (
-    #             SELECT QH.QUERY_ID
-    #                 ,QH.QUERY_TEXT
-    #                 ,QH.USER_NAME
-    #                 ,QH.ROLE_NAME
-    #                 ,QH.COMPILATION_TIME
-    #                 ,QH.START_TIME
-    #                 ,QH.END_TIME
-    #                 ,QH.WAREHOUSE_NAME
-    #                 ,QH.EXECUTION_TIME
-    #                 ,QH.WAREHOUSE_SIZE
-    #                 ,QH.BYTES_SCANNED
-    #                 ,QH.PERCENTAGE_SCANNED_FROM_CACHE
-    #                 ,QH.BYTES_SPILLED_TO_LOCAL_STORAGE
-    #                 ,QH.BYTES_SPILLED_TO_REMOTE_STORAGE
-    #                 ,QH.PARTITIONS_SCANNED
-    #                 ,QH.PARTITIONS_TOTAL
-    #                 ,QH.EXECUTION_STATUS
-    #             FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
-    #             WHERE START_TIME between '{start_date}' and '{end_date}'
-    #         )
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
 
-    #         SELECT QH.QUERY_ID
-    #             ,QH.QUERY_TEXT
-    #             ,QH.USER_NAME
-    #             ,QH.ROLE_NAME
-    #             ,QH.START_TIME
-    #             ,QH.END_TIME
-    #             ,ROUND(QH.EXECUTION_TIME/(1000*60),2) AS EXECUTION_TIME_MINUTES
-    #             ,QH.WAREHOUSE_NAME
-    #             ,QH.BYTES_SCANNED
-    #             ,QH.PERCENTAGE_SCANNED_FROM_CACHE
-    #             ,QH.BYTES_SPILLED_TO_LOCAL_STORAGE
-    #             ,QH.BYTES_SPILLED_TO_REMOTE_STORAGE
-    #             ,QH.PARTITIONS_SCANNED
-    #             ,QH.PARTITIONS_TOTAL
-    #             ,WS.WAREHOUSE_SIZE
-    #             ,WS.NODES
-    #             ,ROUND((QH.COMPILATION_TIME/(1000)),2) AS COMPILATION_TIME_SEC
-    #             ,ROUND((QH.EXECUTION_TIME/(1000*60)),2) AS EXECUTION_TIME_MIN
-    #             ,ROUND((QH.EXECUTION_TIME/(1000*60*60))*WS.NODES,2) as CREDITS
-    #             ,QH.EXECUTION_STATUS
-
-    #         FROM QUERY_HISTORY QH
-    #         JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
-    #         ORDER BY CREDITS DESC
-    #         LIMIT {n}
-    #         ;
-    #     """
-    #     df = self.query_to_df(sql)
-    #     return df
-
-    # def longest_running_queries(self, start_date='2022-01-01',end_date='', n=10):
-    #     """
-    #     Shows the queries with the most elapsed time.
-    #     Outputs a dataframe with the following columns:
-    #     QUERY_TEXT: Text of SQL statement.
-    #     QUERY_TYPE:DML, query, etc. If the query failed, then the query type may be UNKNOWN.
-    #     USER_NAME: User who issued the query.
-    #     EXECUTION_MINUTES: execution time of query in minutes.
-    #     WAREHOUSE_NAME: Warehouse that the query executed on.
-    #     BYTES_SPILLED_TO_LOCAL_STORAGE: Volume of data spilled to local disk.
-    #     BYTES_SPILLED_TO_REMOTE_STORAGE: Volume of data spilled to remote disk.
-    #     PARTITIONS_SCANNED: Number of micro-partitions scanned.
-    #     PARTITIONS_TOTAL: Total micro-partitions of all tables included in this query.
-    #     CLUSTER_NUMBER: The cluster (in a multi-cluster warehouse) that this statement executed on.
-    #     COMPILATION_TIME_SEC: Compilation time (in seconds).
-    #     CREDITS: Credits consumed by the query.
-    #     EXECUTION_STATUS: Execution status for the query. Valid values: success, fail, incident.
         
-    #     """
-    #     if not end_date:
-    #         today_date = date.today()
-    #         end_date = str(today_date)
-    #     sql=f"""
-    #     WITH WAREHOUSE_SIZE AS
-    #     (
-    #         SELECT WAREHOUSE_SIZE, NODES
-    #         FROM (
-    #                 SELECT 'X-SMALL' AS WAREHOUSE_SIZE, 1 AS NODES
-    #                 UNION ALL
-    #                 SELECT 'SMALL' AS WAREHOUSE_SIZE, 2 AS NODES
-    #                 UNION ALL
-    #                 SELECT 'MEDIUM' AS WAREHOUSE_SIZE, 4 AS NODES
-    #                 UNION ALL
-    #                 SELECT 'LARGE' AS WAREHOUSE_SIZE, 8 AS NODES
-    #                 UNION ALL
-    #                 SELECT 'XLARGE' AS WAREHOUSE_SIZE, 16 AS NODES
-    #                 UNION ALL
-    #                 SELECT '2XLARGE' AS WAREHOUSE_SIZE, 32 AS NODES
-    #                 UNION ALL
-    #                 SELECT '3XLARGE' AS WAREHOUSE_SIZE, 64 AS NODES
-    #                 UNION ALL
-    #                 SELECT '4XLARGE' AS WAREHOUSE_SIZE, 128 AS NODES
-    #                 )
-    #     )
-    #        SELECT QH.QUERY_ID
-    #         ,QH.QUERY_TYPE
-    #         ,QH.QUERY_TEXT
-    #         ,QH.USER_NAME
-    #         ,QH.ROLE_NAME
-    #         ,QH.DATABASE_NAME
-    #         ,QH.SCHEMA_NAME
-    #         ,QH.WAREHOUSE_NAME
-    #         ,QH.WAREHOUSE_SIZE
-    #         ,QH.BYTES_SPILLED_TO_LOCAL_STORAGE
-    #         ,QH.BYTES_SPILLED_TO_REMOTE_STORAGE
-    #         ,QH.PARTITIONS_SCANNED
-    #         ,QH.PARTITIONS_TOTAL
-    #         ,ROUND((QH.COMPILATION_TIME/(1000)),2) AS COMPILATION_TIME_SEC
-    #         ,ROUND((QH.EXECUTION_TIME/(1000*60)),2) AS EXECUTION_TIME_MIN
-    #         ,ROUND((QH.EXECUTION_TIME/(1000*60*60))*WS.NODES,2) as CREDITS
-    #         ,QH.CLUSTER_NUMBER
-    #         ,QH.EXECUTION_STATUS
+        sql = f"""
+            select
+                qh.user_name, 
+                qh.execution_status, 
+                qh.warehouse_name,
+                date_trunc('day', qh.start_time) as day,
+                count(*) as counts
+            from 
+                {self.dbname}.account_usage.query_history qh
+            where 
+                date_trunc('day', qh.start_time) between '{start_date}' and '{end_date}'
+            group by 
+                qh.user_name, 
+                qh.execution_status, 
+                qh.warehouse_name,
+                day
+            order by 
+                user_name, day;
+        """
 
-    #     from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
-    #     JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
-    #     where 1=1
-    #     and TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
-    #         and TOTAL_ELAPSED_TIME > 0 --only get queries that actually used compute
-    #         and ERROR_CODE iS NULL
-    #         and PARTITIONS_SCANNED is not null
-        
-    #     order by  TOTAL_ELAPSED_TIME desc
-        
-    #     LIMIT {n}
-    #     """
-
-    #     df=self.query_to_df(sql)
-    #     return df
+        df = self.query_to_df(sql)
+        df = df.fillna("Unassigned")
+        df["n_success"] = (df["execution_status"] == "SUCCESS").astype(int)*df["counts"]
+        df["n_fail"] = (df["execution_status"] == "FAIL").astype(int)*df["counts"]
+        return df
 
 
-    # ##TODO: Update query output columns to be same as expensive queries
-    # def n_queries_spill_to_storage(self, start_date='2022-01-01', end_date='', n=10):
-    #     """
-    #     Shows queries spilling maximum remote storage
-    #     Outputs a dataframe with the following columns:
-    #     QUERY_TEXT: Text of SQL statement.
-    #     QUERY_TYPE:DML, query, etc. If the query failed, then the query type may be UNKNOWN.
-    #     QUERY_ID: Internal/system-generated identifier for the SQL statement.
-    #     USER_NAME: User who issued the query.
-    #     ROLE_NAME: Role that was active in the session at the time of the query.
-    #     DATABASE_NAME: Database that was in use at the time of the query
-    #     SCHEMA_NAME: Schema that was in use at the time of the query
-    #     EXECUTION_TIME_MINUTES: execution time of query in minutes.
-    #     WAREHOUSE_NAME: Warehouse that the query executed on.
-    #     BYTES_SPILLED_TO_LOCAL_STORAGE: Volume of data spilled to local disk.
-    #     BYTES_SPILLED_TO_REMOTE_STORAGE: Volume of data spilled to remote disk.
-    #     PARTITIONS_SCANNED: Number of micro-partitions scanned.
-    #     PARTITIONS_TOTAL: Total micro-partitions of all tables included in this query.
-    #     WAREHOUSE_SIZE: Size of the warehouse the queries are executed on.
-    #     CLUSTER_NUMBER: The cluster (in a multi-cluster warehouse) that this statement executed on.
-    #     COMPILATION_TIME_SEC: Compilation time (in seconds).
-    #     CREDITS: Credits consumed by the query.
-    #     EXECUTION_STATUS: Execution status for the query. Valid values: success, fail, incident.
-
-    #     """
-    #     if not end_date:
-    #         today_date = date.today()
-    #         end_date = str(today_date)
-    #     sql = f"""
-        
-
-    #     WITH WAREHOUSE_SIZE AS
-    #     (
-    #         SELECT WAREHOUSE_SIZE, NODES
-    #         FROM (
-    #                 SELECT 'X-SMALL' AS WAREHOUSE_SIZE, 1 AS NODES
-    #                 UNION ALL
-    #                 SELECT 'SMALL' AS WAREHOUSE_SIZE, 2 AS NODES
-    #                 UNION ALL
-    #                 SELECT 'MEDIUM' AS WAREHOUSE_SIZE, 4 AS NODES
-    #                 UNION ALL
-    #                 SELECT 'LARGE' AS WAREHOUSE_SIZE, 8 AS NODES
-    #                 UNION ALL
-    #                 SELECT 'XLARGE' AS WAREHOUSE_SIZE, 16 AS NODES
-    #                 UNION ALL
-    #                 SELECT '2XLARGE' AS WAREHOUSE_SIZE, 32 AS NODES
-    #                 UNION ALL
-    #                 SELECT '3XLARGE' AS WAREHOUSE_SIZE, 64 AS NODES
-    #                 UNION ALL
-    #                 SELECT '4XLARGE' AS WAREHOUSE_SIZE, 128 AS NODES
-    #                 )
-    #     )
-       
-
-    #     SELECT QH.QUERY_ID
-    #         ,QH.QUERY_TYPE
-    #         ,QH.QUERY_TEXT
-    #         ,QH.USER_NAME
-    #         ,QH.ROLE_NAME
-    #         ,QH.DATABASE_NAME
-    #         ,QH.SCHEMA_NAME
-    #         ,QH.WAREHOUSE_NAME
-    #         ,QH.WAREHOUSE_SIZE
-    #         ,QH.BYTES_SPILLED_TO_LOCAL_STORAGE
-    #         ,QH.BYTES_SPILLED_TO_REMOTE_STORAGE
-    #         ,QH.PARTITIONS_SCANNED
-    #         ,QH.PARTITIONS_TOTAL
-    #         ,ROUND((QH.COMPILATION_TIME/(1000)),2) AS COMPILATION_TIME_SEC
-    #         ,ROUND((QH.EXECUTION_TIME/(1000*60)),2) AS EXECUTION_TIME_MIN
-    #         ,ROUND((QH.EXECUTION_TIME/(1000*60*60))*WS.NODES,2) as CREDITS
-    #         ,QH.CLUSTER_NUMBER
-    #         ,QH.EXECUTION_STATUS
-    #     from  {self.dbname}.account_usage.query_history QH
-    #     JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
-       
-        
-    #     where  BYTES_SPILLED_TO_REMOTE_STORAGE > 0
-    #     and TO_DATE(start_time) between '{start_date}' and '{end_date}'
-        
-    #     order  by BYTES_SPILLED_TO_REMOTE_STORAGE desc
-    #     limit {n};
-    #     """
-    #     df = self.query_to_df(sql)
-    #     return df
-    
-    # ##TODO: Update query output columns to be same as expensive queries
-    # def n_queries_scanned_most_data(self, start_date='2022-01-01',end_date='2022-02-02',n=10):
-    #     """
-    #     Shows queries that scan the most data
-    #     Outputs a dataframe with the following columns:
-    #     QUERY_TEXT: Text of SQL statement.
-    #     QUERY_TYPE:DML, query, etc. If the query failed, then the query type may be UNKNOWN.
-    #     QUERY_ID: Internal/system-generated identifier for the SQL statement.
-    #     USER_NAME: User who issued the query.
-    #     ROLE_NAME: Role that was active in the session at the time of the query.
-    #     DATABASE_NAME: Database that was in use at the time of the query
-    #     SCHEMA_NAME: Schema that was in use at the time of the query
-    #     EXECUTION_TIME_MINUTES: execution time of query in minutes.
-    #     WAREHOUSE_NAME: Warehouse that the query executed on.
-    #     BYTES_SPILLED_TO_LOCAL_STORAGE: Volume of data spilled to local disk.
-    #     BYTES_SPILLED_TO_REMOTE_STORAGE: Volume of data spilled to remote disk.
-    #     PARTITIONS_SCANNED: Number of micro-partitions scanned.
-    #     PARTITIONS_TOTAL: Total micro-partitions of all tables included in this query.
-    #     WAREHOUSE_SIZE: Size of the warehouse the queries are executed on.
-    #     CLUSTER_NUMBER: The cluster (in a multi-cluster warehouse) that this statement executed on.
-    #     COMPILATION_TIME_SEC: Compilation time (in seconds).
-    #     CREDITS: Credits consumed by the query.
-    #     EXECUTION_STATUS: Execution status for the query. Valid values: success, fail, incident.
-
-    #     """
-        
-    #     if not end_date:
-    #         today_date = date.today()
-    #         end_date = str(today_date)
-    #     sql= f"""
-    #     WITH WAREHOUSE_SIZE AS
-    #     (
-    #         SELECT WAREHOUSE_SIZE, NODES
-    #         FROM (
-    #                 SELECT 'X-SMALL' AS WAREHOUSE_SIZE, 1 AS NODES
-    #                 UNION ALL
-    #                 SELECT 'SMALL' AS WAREHOUSE_SIZE, 2 AS NODES
-    #                 UNION ALL
-    #                 SELECT 'MEDIUM' AS WAREHOUSE_SIZE, 4 AS NODES
-    #                 UNION ALL
-    #                 SELECT 'LARGE' AS WAREHOUSE_SIZE, 8 AS NODES
-    #                 UNION ALL
-    #                 SELECT 'XLARGE' AS WAREHOUSE_SIZE, 16 AS NODES
-    #                 UNION ALL
-    #                 SELECT '2XLARGE' AS WAREHOUSE_SIZE, 32 AS NODES
-    #                 UNION ALL
-    #                 SELECT '3XLARGE' AS WAREHOUSE_SIZE, 64 AS NODES
-    #                 UNION ALL
-    #                 SELECT '4XLARGE' AS WAREHOUSE_SIZE, 128 AS NODES
-    #                 )
-    #     )
-
-    #     SELECT QH.QUERY_ID
-    #         ,QH.QUERY_TYPE
-    #         ,QH.QUERY_TEXT
-    #         ,QH.USER_NAME
-    #         ,QH.ROLE_NAME
-    #         ,QH.DATABASE_NAME
-    #         ,QH.SCHEMA_NAME
-    #         ,QH.WAREHOUSE_NAME
-    #         ,QH.WAREHOUSE_SIZE
-    #         ,QH.BYTES_SPILLED_TO_LOCAL_STORAGE
-    #         ,QH.BYTES_SPILLED_TO_REMOTE_STORAGE
-    #         ,QH.PARTITIONS_SCANNED
-    #         ,QH.PARTITIONS_TOTAL
-    #         ,ROUND((QH.COMPILATION_TIME/(1000)),2) AS COMPILATION_TIME_SEC
-    #         ,ROUND((QH.EXECUTION_TIME/(1000*60)),2) AS EXECUTION_TIME_MIN
-    #         ,ROUND((QH.EXECUTION_TIME/(1000*60*60))*WS.NODES,2) as CREDITS
-    #         ,QH.CLUSTER_NUMBER
-    #         ,QH.EXECUTION_STATUS
-        
-
-    #     from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
-    #     JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
-    #     where 1=1
-    #     and TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
-    #         and TOTAL_ELAPSED_TIME > 0 --only get queries that actually used compute
-    #         and ERROR_CODE iS NULL
-    #         and PARTITIONS_SCANNED is not null
-        
-    #     order by PARTITIONS_SCANNED desc
-    #     LIMIT {n}
-    #     """
-    #     df=self.query_to_df(sql)
-    #     return df
-    
-    # ##TODO: Update query output columns to be same as expensive queries
-    # def n_most_cached_queries(self, start_date='2022-01-01',end_date='', n=10):
-    #     """
-    #     Shows the top queries that scanned high percentage of data from cache
-    #     Outputs a dataframe with the following columns:
-    #     QUERY_TEXT: Text of SQL statement.
-    #     QUERY_TYPE:DML, query, etc. If the query failed, then the query type may be UNKNOWN.
-    #     QUERY_ID: Internal/system-generated identifier for the SQL statement.
-    #     USER_NAME: User who issued the query.
-    #     ROLE_NAME: Role that was active in the session at the time of the query.
-    #     DATABASE_NAME: Database that was in use at the time of the query
-    #     SCHEMA_NAME: Schema that was in use at the time of the query
-    #     EXECUTION_TIME_MINUTES: execution time of query in minutes.
-    #     WAREHOUSE_NAME: Warehouse that the query executed on.
-    #     BYTES_SPILLED_TO_LOCAL_STORAGE: Volume of data spilled to local disk.
-    #     BYTES_SPILLED_TO_REMOTE_STORAGE: Volume of data spilled to remote disk.
-    #     PARTITIONS_SCANNED: Number of micro-partitions scanned.
-    #     PARTITIONS_TOTAL: Total micro-partitions of all tables included in this query.
-    #     PERCENTAGE_SCANNED_FROM_CACHE: The percentage of data scanned from the local disk cache.
-    #     WAREHOUSE_SIZE: Size of the warehouse the queries are executed on.
-    #     CLUSTER_NUMBER: The cluster (in a multi-cluster warehouse) that this statement executed on.
-    #     COMPILATION_TIME_SEC: Compilation time (in seconds).
-    #     CREDITS: Credits consumed by the query.
-    #     EXECUTION_STATUS: Execution status for the query. Valid values: success, fail, incident.
-
-    #     """
-    #     if not end_date:
-    #         today_date = date.today()
-    #         end_date = str(today_date)
-    #     sql=f""" 
-    #     WITH WAREHOUSE_SIZE AS
-    #     (
-    #         SELECT WAREHOUSE_SIZE, NODES
-    #         FROM (
-    #                 SELECT 'X-SMALL' AS WAREHOUSE_SIZE, 1 AS NODES
-    #                 UNION ALL
-    #                 SELECT 'SMALL' AS WAREHOUSE_SIZE, 2 AS NODES
-    #                 UNION ALL
-    #                 SELECT 'MEDIUM' AS WAREHOUSE_SIZE, 4 AS NODES
-    #                 UNION ALL
-    #                 SELECT 'LARGE' AS WAREHOUSE_SIZE, 8 AS NODES
-    #                 UNION ALL
-    #                 SELECT 'XLARGE' AS WAREHOUSE_SIZE, 16 AS NODES
-    #                 UNION ALL
-    #                 SELECT '2XLARGE' AS WAREHOUSE_SIZE, 32 AS NODES
-    #                 UNION ALL
-    #                 SELECT '3XLARGE' AS WAREHOUSE_SIZE, 64 AS NODES
-    #                 UNION ALL
-    #                 SELECT '4XLARGE' AS WAREHOUSE_SIZE, 128 AS NODES
-    #                 )
-    #     )
-
-    #     SELECT QH.QUERY_ID
-    #         ,QH.QUERY_TYPE
-    #         ,QH.QUERY_TEXT
-    #         ,QH.USER_NAME
-    #         ,QH.ROLE_NAME
-    #         ,QH.DATABASE_NAME
-    #         ,QH.SCHEMA_NAME
-    #         ,QH.WAREHOUSE_NAME
-    #         ,QH.WAREHOUSE_SIZE
-    #         ,QH.BYTES_SPILLED_TO_LOCAL_STORAGE
-    #         ,QH.BYTES_SPILLED_TO_REMOTE_STORAGE
-    #         ,QH.PARTITIONS_SCANNED
-    #         ,QH.PARTITIONS_TOTAL
-    #         ,ROUND((QH.COMPILATION_TIME/(1000)),2) AS COMPILATION_TIME_SEC
-    #         ,ROUND((QH.EXECUTION_TIME/(1000*60)),2) AS EXECUTION_TIME_MIN
-    #         ,ROUND((QH.EXECUTION_TIME/(1000*60*60))*WS.NODES,2) as CREDITS
-    #         ,QH.CLUSTER_NUMBER
-    #         ,QH.EXECUTION_STATUS
-    #         ,BYTES_SCANNED
-    #         ,PERCENTAGE_SCANNED_FROM_CACHE*100 as percent_scanned_from_cache
-    #     from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
-    #     JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
-    #     WHERE TO_DATE(START_TIME) between '{start_date}' and '{end_date}'
-    #     AND BYTES_SCANNED > 0
-    #     ORDER BY PERCENT_SCANNED_FROM_CACHE DESC
-    #     LIMIT {n}
-       
-    #     """
-       
-        
-    #     df=self.query_to_df(sql)
-    #     return df
-    
-    ##TODO: Convert this into N most frequently executed Select queries so these can be identified 
-    # as targets for creating new tables or materialized views
     
     def n_most_executed_select_queries(self, start_date='2022-01-01',end_date='', n=10):
         """
@@ -668,5 +268,14 @@ class QueryProfile(SNFLKQuery):
         order by execution_time desc
         """
         df=self.query_to_df(sql)
+        return df
+
+    def query_id_to_details(self, query_id):
+        sql = f"""
+            select * 
+            from {self.dbname}.account_usage.query_history
+            WHERE query_id='{query_id}'
+        """
+        df = self.query_to_df(sql)
         return df
 
