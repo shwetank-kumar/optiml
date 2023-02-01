@@ -91,7 +91,7 @@ class CostProfile(SNFLKQuery):
                       ,({credit_val}*credits_used_cloud_services) as cloud_services_dollars
                       ,date_trunc('hour', start_time) as hourly_start_time
                 from {self.dbname}.account_usage.warehouse_metering_history
-                where DATE_TRUNC('day', start_time) between '{start_date}' and '{end_date}'
+                where date_trunc('day', start_time) between '{start_date}' and '{end_date}'
                 order by 4 asc;
         """
 
@@ -512,3 +512,18 @@ class CostProfile(SNFLKQuery):
 
         df = self.query_to_df(sql)
         return df
+
+    def credits_by_day(self, start_date='2022-01-01', end_date=''):
+        df = self.total_cost_breakdown_ts(start_date, end_date)
+        df = self.aggregate_by_day(df)
+        return df
+
+
+    
+    def aggregate_by_day(self, df):
+        df["date"] = pd.to_datetime(df["hourly_start_time"])
+        df.drop(columns="hourly_start_time", inplace=True)
+        df = df.set_index("date")
+        df_daily = df.resample('D').sum()
+        df_daily.reset_index(inplace=True)
+        return df_daily
