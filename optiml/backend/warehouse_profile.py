@@ -24,7 +24,7 @@ class WarehouseProfile(SNFLKQuery):
         
         WITH wlh as (
         SELECT DATE_TRUNC('{delta}', wl.start_time) hourly_start_time,
-        AVG(avg_running) avg_running, AVG(avg_queued_load) avg_queued_load 
+        AVG(avg_running) avg_running_load, AVG(avg_queued_load) avg_queued_load 
         FROM {self.dbname}.account_usage.warehouse_load_history wl
         WHERE DATE_TRUNC('DAY', wl.start_time) between'{start_date}' and '{end_date}'
         AND wl.warehouse_name = '{wh_name}'
@@ -52,7 +52,7 @@ class WarehouseProfile(SNFLKQuery):
         ORDER BY  hourly_start_time
         )
         SELECT wlh.hourly_start_time, 
-        wlh.avg_running, 
+        wlh.avg_running_load, 
         wlh.avg_queued_load, 
         wmh.credits_used, 
         qh.query_count,
