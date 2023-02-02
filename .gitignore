@@ -6,3 +6,4 @@ optiml/users.py
 optiml/backend/__pycache__
 optiml/pages/__pycache__
 notebooks/knot/.ipynb_checkpoints
+*.pyc
