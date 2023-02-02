@@ -5,7 +5,7 @@ import pandas as pd
 
 class QueryProfile(SNFLKQuery):
 
-    def _append_query_hash(self, df):
+    def append_query_hash(self, df):
         queries = df["query_text"].values.tolist()
         query_hashes = [hashlib.md5(q.encode()).hexdigest() for q in queries]
         df["query_hash"] = query_hashes
@@ -19,7 +19,7 @@ class QueryProfile(SNFLKQuery):
         return y
 
     def get_unique_queries(self, df, metric):
-        df = self._append_query_hash(df)
+        df = self.append_query_hash(df)
         df1 = pd.DataFrame()
         df1 = df.groupby(['query_hash']).agg({
                 metric:'mean',
@@ -34,6 +34,19 @@ class QueryProfile(SNFLKQuery):
 
     def n_inefficient_queries(self, start_date='', end_date='', n=10, metric='credits', unique=False):
         """Inefficient queries as order by metric. Metric options:
+            bytes_scanned,
+            percentage_scanned_from_cache,
+            bytes_spilled_to_local_storage,
+            bytes_spilled_to_remote_storage,
+            percentage_partitions_scanned,
+            partitions_total,
+            total_time_elapsed_sec,
+            compilation_time_sec,
+            execution_time_sec,
+            queued_provisioning_time_sec,
+            queued_repair_time_sec,
+            queued_overload_time_sec,
+            list_external_files_time_sec,
             total_time_elapsed_sec,
             credits
         """
@@ -278,7 +291,8 @@ class QueryProfile(SNFLKQuery):
         """
         df = self.query_to_df(sql)
         return df
-    def get_queries(self,n=10, **kwargs):
+
+    def get_queries(self, **kwargs):
         sql=str()
         defaultKwargs = { 
                 'start_date': '', 
@@ -286,9 +300,10 @@ class QueryProfile(SNFLKQuery):
                 'user': None, 
                 'wh': None,
                 'es': None,
-
+                'n': 10
              }
         kwargs = { **defaultKwargs, **kwargs }
+        n = kwargs['n']
         if kwargs['wh']!=None and kwargs['user']!=None and kwargs['es']!=None:
             sql = f"""
             select qh.query_id,
@@ -402,7 +417,7 @@ class QueryProfile(SNFLKQuery):
             qh.warehouse_size,
             qh.warehouse_type,
             qh.bytes_scanned,
-            round(qh.percentage_socanned_from_cache*100,2) as percentage_scanned_from_cache,
+            round(qh.percentage_scanned_from_cache*100,2) as percentage_scanned_from_cache,
             qh.bytes_spilled_to_local_storage,
             qh.bytes_spilled_to_remote_storage,
             qh.partitions_total,
