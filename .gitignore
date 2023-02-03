@@ -1,0 +1,10 @@
+notebooks/.ipynb_checkpoints
+notebooks/.gitattributes
+notebooks/kiva/.ipynb_checkpoints
+notebooks/knott/.ipynb_checkpoints
+optiml/backend/__pycache__
+optiml/pages/__pycache__
+optiml/__pycache__
+notebooks/knot/.ipynb_checkpoints
+.DS_Store
+*.pyc
