@@ -13,16 +13,12 @@ from connection import SnowflakeConnConfig
 color_scheme = ["red", "blue", "green", "orange", "purple", "brown", "pink", "gray", "olive", "cyan", "darkviolet",
                 "goldenrod",
                 "darkgreen", "chocolate", "lawngreen"]
-st.set_page_config(
-    page_title="Snowflake Dashboard",
-    page_icon="〰️",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+
 
 connection = SnowflakeConnConfig(accountname='jg84276.us-central1.gcp', warehousename="XSMALL_WH").create_connection()
-cache_dir = os.path.expanduser('~/data/knot')
-cqlib = CostProfile(connection, 'KNT', cache_dir, "enterprise")
+cache_dir = os.path.expanduser('~/data/kiva')
+# Initialize query library
+cqlib = CostProfile(connection, 'KIV', cache_dir)
 
 sdate = '2022-10-11'
 edate = '2022-10-21'
@@ -32,8 +28,8 @@ if 'raw_df' in st.session_state:
 
 
 @st.cache
-def total_cost_curr_month():
-    df = cqlib.total_cost_breakdown_ts(sdate, edate)
+def total_cost_curr_month(df):
+    # df = cqlib.total_cost_breakdown_ts(sdate, edate)
     df = df.fillna('Unassigned')
     df_by_usage_category = df.groupby("category_name").sum("numeric_only").reset_index()
     df_by_usage_category.loc[len(df_by_usage_category.index)] = ['Total', df_by_usage_category['credits'].sum(),
@@ -59,8 +55,25 @@ def total_cost_prev_month():
     return df_by_usage_category_prev
 
 
-def plot_total_usage():
-    df = st.session_state['raw_df']
+def plot_total_usage_ts(df):
+    df_by_category_ts = df.groupby(['category_name', 'hourly_start_time']).sum('numeric_only').reset_index()
+    fig = px.area(df_by_category_ts, x="hourly_start_time", y="dollars", color="category_name",
+                  color_discrete_sequence=color_scheme)
+    fig.update_layout(
+        title={
+            'text': "Timeseries of cost by usage category",
+            'y': 0.95,
+            'x': 0.5,
+            'xanchor': 'center',
+            'yanchor': 'top'},
+        xaxis_title="Hourly start time (UTC)",
+        yaxis_title="US Dollars"
+    )
+    # fig.show()
+    return fig
+
+
+def plot_total_usage(df):
     df_by_usage_category = df.groupby("category_name").sum("numeric_only").reset_index()
     df_by_usage_category.reset_index(inplace=True)
     df_by_usage_category.drop(columns=["index"], inplace=True)
@@ -73,11 +86,11 @@ def plot_total_usage():
 
     fig.add_trace(
         go.Pie(labels=df_by_usage_category['category_name'].tolist(), values=df_by_usage_category['dollars'].tolist(),
-               name="Dollars",  hole=0.3,
+               name="Dollars", hole=0.3,
                rotation=45, marker_colors=color_scheme), row=1, col=1)
     fig.add_trace(
         go.Pie(labels=df_by_usage_category['category_name'].tolist(), values=df_by_usage_category['credits'].tolist(),
-               name='Credits',hole=0.3,
+               name='Credits', hole=0.3,
                rotation=45, marker_colors=color_scheme), row=1, col=2)
 
     fig.update_layout(
@@ -92,7 +105,7 @@ def plot_total_usage():
     return fig
 
 
-def show_dashboard(dash_df):
+def show_dashboard(df):
     st.header("Snowflake Resource Dashboard 🎈")
     st.write("")
     st.write("")
@@ -100,7 +113,7 @@ def show_dashboard(dash_df):
     # st.write("""Breakdown of cost based on the usage category.
     #                         This helps you track the consumption and cost.""")
     prev_cost_df = total_cost_prev_month()
-    curr_cost_df = total_cost_curr_month()
+    curr_cost_df = total_cost_curr_month(df)
     row1_cols = st.columns([1, 1])
     row1_cols[0].write('Credit and dollar usage by category (Previous month)')
     row1_cols[0].dataframe(prev_cost_df, use_container_width=True)
@@ -109,9 +122,7 @@ def show_dashboard(dash_df):
     st.write("")
     st.write("")
     st.write("")
-    st.info("""
-    #### Comparison of metric from previous month.
-    """)
+    st.success(""" Comparison of metric from previous month.""")
     metric1, metric2, metric3, metric4 = st.columns(4)
     metric1.metric("Autoclustering", "5.01", "2.17")
     metric2.metric("Cloud services", "462.06", "-8%")
@@ -120,5 +131,8 @@ def show_dashboard(dash_df):
     st.write("")
     st.write("")
     st.write("")
-    st.plotly_chart(plot_total_usage(),use_container_width=True)
-
+    st.plotly_chart(plot_total_usage(df), use_container_width=True)
+    st.write("")
+    st.write("")
+    st.success("Total Cost in timeseries.")
+    st.plotly_chart(plot_total_usage_ts(df),use_container_width=True)
