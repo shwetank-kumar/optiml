@@ -14,16 +14,24 @@ cqlib = CostProfile(connection, 'KNT', cache_dir, "enterprise")
 sdate = '2022-10-11'
 edate = '2022-10-21'
 
+st.set_page_config(
+    page_title="Snowflake",
+    page_icon="〰️",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+df = cqlib.total_cost_breakdown_ts(sdate, edate)
 
 if 'raw_df' not in st.session_state:
-    st.session_state['raw_df']  = cqlib.total_cost_breakdown_ts(sdate, edate)
+    st.session_state['raw_df'] = df = cqlib.total_cost_breakdown_ts(sdate, edate)
 
 
 with st.sidebar:
     st.header("Welcome to OPTIM")
     selected = option_menu(
         menu_title=None,
-        options=['Home', 'Dashboard', 'About Us'],
+        options=['Home', 'Resource Usage', 'About Us'],
         icons=['house', 'file-bar-graph-fill', 'droplet-fill', 'gear']
         , menu_icon="cast")
 
@@ -31,5 +39,5 @@ with st.sidebar:
 if selected == 'Home':
     myhome = Homepage()
     myhome.home_page()
-elif selected == 'Dashboard':
-    show_dashboard("")
+elif selected == 'Resource Usage':
+    show_dashboard(df)
