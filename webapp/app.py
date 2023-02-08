@@ -11,6 +11,7 @@ connection = SnowflakeConnConfig(accountname='jg84276.us-central1.gcp', warehous
 cache_dir = os.path.expanduser('~/data/knot')
 cqlib = CostProfile(connection, 'KNT', cache_dir, "enterprise")
 
+print("Hello")
 sdate = '2022-10-11'
 edate = '2022-10-21'
 
@@ -22,22 +23,30 @@ st.set_page_config(
 )
 
 df = cqlib.total_cost_breakdown_ts(sdate, edate)
+# session_argument = st.session_state
+session_argument = {}
 
-if 'raw_df' not in st.session_state:
-    st.session_state['raw_df'] = df = cqlib.total_cost_breakdown_ts(sdate, edate)
+if 'total_cost_df' not in st.session_state:
+    st.session_state.total_cost_df = 0
+    st.session_state.total_cost_df = cqlib.total_cost_breakdown_ts(sdate, edate)
 
+if 'cost_by_user_df' not in st.session_state:
+    st.session_state.cost_by_user_df = 0
+    st.session_state.cost_by_user_df = cqlib.cost_by_user_ts(sdate, edate)
 
 with st.sidebar:
     st.header("Welcome to OPTIM")
     selected = option_menu(
         menu_title=None,
-        options=['Home', 'Resource Usage', 'About Us'],
-        icons=['house', 'file-bar-graph-fill', 'droplet-fill', 'gear']
+        options=['Home', 'Resource Usage', 'Query Profile', 'WH Profile', 'Storage Profile', 'User Profile',
+                 'About Us'],
+        icons=['house', 'file-bar-graph-fill', 'file-bar-graph-fill', 'file-bar-graph-fill', 'file-bar-graph-fill',
+               'file-bar-graph-fill', 'droplet-fill', 'gear']
         , menu_icon="cast")
-
 
 if selected == 'Home':
     myhome = Homepage()
     myhome.home_page()
 elif selected == 'Resource Usage':
-    show_dashboard(df)
+    print("Resource Usage Selected")
+    show_dashboard(**st.session_state)
