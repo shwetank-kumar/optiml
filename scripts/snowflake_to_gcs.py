@@ -1,30 +1,70 @@
-import os
+import pickle
+import json
 import snowflake.connector
 import logging
+import datetime
+from pandas import read_sql, DataFrame
+
 # import pendulum
 
-from pandas import read_sql, DataFrame
+# ToDo: 1. Get data between two timestamp and save it to pickle or local csv format.
+
 # from src.etl.lib.s3_utils import AnbS3BucketUtils, get_s3_bucket_credentials
 # from src.etl.lib.log_utils import get_logger
 
 # logger = get_logger(__name__)
 
+user = "SARWAR"
+password = "Reshu@123"
+warehouse = "XSMALL_WH"
+accountname = "VUJSGPR-XG91870"
+role = "ACCOUNTADMIN"
+database = 'SNOWFLAKE'
+
+
+def read_params(param_path):
+    with open(param_path) as fp:
+        param_dict = json.load(fp)
+    param_dict = {k.lower(): v for k, v in param_dict.items()}
+    return param_dict
+
+
+def get_query(params, **inputs):
+    table = inputs['table'].lower()
+    print(f"Getting query for table :: {table}")
+    if table not in params:
+        raise Exception("Input table is not available")
+
+    start_time = datetime.datetime.strptime(inputs['end_time'], "%Y-%m-%d") - datetime.timedelta(
+        days=inputs['timedelta'])
+
+    # Case 1: When we have start and end time.
+    if "START_TIME" in params[table] and "END_TIME" in params[table]:
+        sql = f"""select * from {inputs["database"]}.{inputs['schema']}.{inputs['table']} where start_time >= '{start_time}' and end_time <= '{inputs['end_time']}'
+                """
+    # Case  2: Without start & end time
+    # ToDo
+    print("Input Query :: ", sql)
+    return sql
+
 
 def get_sf_conn() -> snowflake.connector:
-	'''Returns a snowflake connection object.'''
-	logging.info('returning snowflake connector')
-	return snowflake.connector.connect(user=os.getenv('KIVA_USERNAME'),
-									   password=os.getenv('KIVA_PASSWORD'),
-									   account=os.getenv('KIVA_ACCOUNT'),
-									   warehouse=os.getenv('KIVA_WAREHOUSE'),
-									   database=os.getenv('KIVA_DATABASE'),
-									   role=os.getenv('KIVA_ROLE'))
+    '''Returns a snowflake connection object.'''
+    logging.info('returning snowflake connector')
+    return snowflake.connector.connect(user=(user),
+                                       password=(password),
+                                       account=(accountname),
+                                       warehouse=(warehouse),
+                                       database=(database),
+                                       role=(role))
+
 
 def get_df(sql: str) -> DataFrame:
-	'''Takes a SQL statement and returns a DataFrame.'''
-	logging.info('getting dataframe from snowflake')
-	with get_sf_conn() as conn:
-		return read_sql(sql, conn)
+    '''Takes a SQL statement and returns a DataFrame.'''
+    logging.info('getting dataframe from snowflake')
+    with get_sf_conn() as conn:
+        return read_sql(sql, conn)
+
 
 def get_views(schema):
     sql = f"""
@@ -33,73 +73,42 @@ def get_views(schema):
     df = get_df(sql)
     print(df)
 
-def get_table_data(table, start_date, end_date):
-    sql = f"""
-        select * from {table} 
-        where date_trunc('day', start_time) between {start_date} and {end_date} 
-        order by start_time asc;
-    """
+
+def pickle_it(data, filename):
+    pickle.dump(data, open(filename, "wb"))
+    print(f"Pickled data saved to :: {filename}")
+
+
+def unpickle_it(filepath):
+    return pickle.load(open(filepath, "rb"))
+
+
+def get_table_data(sql):
     df = get_df(sql)
-    print(df)
-
-if __name__=='__main__':
-    schema = 'kiva_prod.optiml'
-    table = 'kiva_prod.optiml.warehouse_metering_history'
-    get_views(schema)
+    print(f"Data fetch complete with {df.shape[0]} rows.")
+    df.to_csv("Query_table.csv", index=False)
+    # print(df)
+    return df
 
 
+inputs = dict(
+    param_path='params.json',
+    database="SNOWFLAKE",
+    schema='ACCOUNT_USAGE',
+    table='QUERY_HISTORY',
+    timedelta=7,
+    end_time='2022-11-08',  # format: YYYY-MM-DD
+    path_to_pickle="query_history_2022-11-08",
+    do_pickle=True)
 
-
-
-# def execute_sql(sql: str) -> None:
-# 	logger.info('executing sql')
-# 	conn = get_sf_conn()
-# 	with conn.cursor() as curs:
-# 		curs.execute(sql)
-
-
-# def write_df_to_snowflake(df, sf_table_name) -> None:
-# 	'''Takes a pandas dataframe and writes to a target Snowflake table.'''
-# 	logger.info(f'writing dataframe to snowflake table {sf_table_name}')
-# 	ts = pendulum.now().format('YYYYMMDD_HHmmssSSS')
-# 	temp_filename = '{0}_{1}.csv'.format(sf_table_name, ts)
-# 	try:
-
-# 		logger.info('creating temporary csv file')
-# 		df.to_csv(temp_filename, index=False)
-
-# 		logger.info('uploading temp csv file to s3')
-# 		s3 = AnbS3BucketUtils()
-# 		s3.upload_file(temp_filename)
-
-# 		logger.info('constructing COPY INTO command')
-# 		aws_creds = get_s3_bucket_credentials()
-		
-# 		copy_into_sql = '''
-# 		COPY INTO {target_sf_table_name} 
-# 	    FROM 'S3://{s3_bucket}/'
-# 	    CREDENTIALS = (AWS_KEY_ID = '{aws_access}' AWS_SECRET_KEY = '{aws_secret}')
-# 	    FILES = ('{key_name}')
-# 	    FILE_FORMAT = (TYPE = csv
-# 	    			   SKIP_HEADER = 1)
-# 		;
-# 		'''.format(target_sf_table_name=sf_table_name,
-# 				   s3_bucket=aws_creds['s3_bucket'],
-# 				   aws_access=aws_creds['aws_access'],
-# 				   aws_secret=aws_creds['aws_secret'],
-# 				   key_name=temp_filename)
-
-# 		with get_sf_conn() as conn:
-
-# 			logger.info('executing COPY INTO command')
-# 			curs = conn.cursor()
-# 			curs.execute(copy_into_sql)
-
-# 	except Exception as e:
-# 		logger.error(f'write_df_to_snowflake error: {e}')
-# 		raise e
-
-# 	finally:
-# 		logger.info('deleting local & s3 copies of temp csv file')
-# 		os.remove(temp_filename)
-# 		s3.delete_file(temp_filename)
+if __name__ == '__main__':
+    # Read Params
+    params = read_params(param_path=inputs['param_path'])
+    # Create Query
+    query = get_query(params, **inputs)
+    # Create Snowflake Connection
+    conn = get_sf_conn()
+    # Get data from table
+    df = get_table_data(query)
+    if inputs['do_pickle']:
+        pickle_it(data=df, filename=inputs['path_to_pickle'])
