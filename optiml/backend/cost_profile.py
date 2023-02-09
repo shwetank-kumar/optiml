@@ -373,14 +373,43 @@ class CostProfile(SNFLKQuery):
         where DATE_TRUNC('day', cost.usage_date) between '{start_date}' and '{end_date}'
         group by 1, 2, 3 order by 2 asc;
         """
-        print(sql)
-        # df = self.query_to_df(sql)
+        # print(sql)
+        df = self.query_to_df(sql)
+        # Returns an unlocalized time
+        # df = df.set_index('start_time').resample('1H').ffill()
+        # df['dollars'] = df['dollars']/24.
+        df.reset_index(inplace=True)
+        df.rename(columns = {'start_time':'hourly_start_time'}, inplace = True)
+        return df
+
+    def cost_of_storage_ts_new(self, start_date='2022-01-01', end_date=''):
+        """
+        Calculates the overall cost of storage usage
+        given time period using Storage Usage Su table.
+        Outputs a dataframe with the fhollowing columns:
+        Category name: Category name as Storage
+        Usage date: The date on which storage is used
+        Dollars used: Total cost of storage (in dollars) used
+        """
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql = f"""
+            select 'Storage' as category_name
+                ,USAGE_DATE
+                ,((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23) as DOLLARS_USED
+                from kiv.ACCOUNT_USAGE.STORAGE_USAGE
+                where usage_date between '2022-10-10' and '2022-10-12'
+            """
+        # print(sql)
+        df = self.query_to_df(sql)
+        
         # # Returns an unlocalized time
         # df = df.set_index('start_time').resample('1H').ffill()
         # df['dollars'] = df['dollars']/24.
-        # df.reset_index(inplace=True)
-        # df.rename(columns = {'start_time':'hourly_start_time'}, inplace = True)
-        # return df
+        df.reset_index(inplace=True)
+        df.rename(columns = {'start_time':'hourly_start_time'}, inplace = True)
+        return df
 
     def cost_by_user_ts(self, start_date='2022-01-01', end_date=''):
         ##TODO: @Manasvini to review
