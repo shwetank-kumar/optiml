@@ -3,6 +3,7 @@ import pandas as pd
 # Initialize analysis dates
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
+from calendar import monthrange
 
 ## Function for date time analysis
 ##TODO: Move to a library function
@@ -342,6 +343,45 @@ class CostProfile(SNFLKQuery):
         return df
 
     # @simple_cache
+    # def cost_of_storage_ts(self, start_date='2022-01-01', end_date=''):
+    #     """
+    #     Calculates the overall cost of storage usage
+    #     given time period using Storage Usage Su table.
+    #     Outputs a dataframe with the fhollowing columns:
+    #     Category name: Category name as Storage
+    #     Usage date: The date on which storage is used
+    #     Dollars used: Total cost of storage (in dollars) used
+    #     """
+    #     if not end_date:
+    #         today_date = date.today()
+    #         end_date = str(today_date)
+    #     sql = f"""
+    #     select 
+    #         cost.category_name
+    #         ,cost.USAGE_DATE::timestamp_ltz as start_time
+    #         ,cost.DOLLARS_USED as dollars
+    #         ,'Snowflake' as user_name
+    #         ,0 as credits from (
+    #         select
+    #                 'Storage' as category_name
+    #                 ,SU.USAGE_DATE
+    #                 ,((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23)/DA.DAYS_IN_MONTH as DOLLARS_USED
+    #         from    {self.dbname}.ACCOUNT_USAGE.STORAGE_USAGE SU
+    #         JOIN    (SELECT COUNT(*) AS DAYS_IN_MONTH,TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01') as DATE_MONTH
+    #         FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM
+    #         GROUP BY TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01')) DA
+    #         ON DA.DATE_MONTH = TO_DATE(DATE_PART('year',USAGE_DATE)||'-'||DATE_PART('month',USAGE_DATE)||'-01')) as cost
+    #     where date_trunc('day', cost.usage_date) between '{start_date}' and '{end_date}'
+    #     group by 1, 2, 3 order by 2 asc;
+    #     """
+    #     # print(sql)
+    #     df = self.query_to_df(sql)
+    #     df = df.set_index('start_time').resample('1H').ffill()
+    #     df['dollars'] = df['dollars']/24.
+    #     df.reset_index(inplace=True, drop=True)
+    #     df.rename(columns = {'start_time':'hourly_start_time'}, inplace = True)
+    #     return df
+
     def cost_of_storage_ts(self, start_date='2022-01-01', end_date=''):
         """
         Calculates the overall cost of storage usage
@@ -355,60 +395,22 @@ class CostProfile(SNFLKQuery):
             today_date = date.today()
             end_date = str(today_date)
         sql = f"""
-        select 
-            cost.category_name
-            ,cost.USAGE_DATE::timestamp_ltz as start_time
-            ,cost.DOLLARS_USED as dollars
-            ,'Snowflake' as user_name
-            ,0 as credits from (
-            select
-                    'Storage' as category_name
-                    ,SU.USAGE_DATE
-                    ,((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23)/DA.DAYS_IN_MONTH as DOLLARS_USED
-            from    {self.dbname}.ACCOUNT_USAGE.STORAGE_USAGE SU
-            JOIN    (SELECT COUNT(*) AS DAYS_IN_MONTH,TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01') as DATE_MONTH
-            FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM
-            GROUP BY TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01')) DA
-            ON DA.DATE_MONTH = TO_DATE(DATE_PART('year',USAGE_DATE)||'-'||DATE_PART('month',USAGE_DATE)||'-01')) as cost
-        where DATE_TRUNC('day', cost.usage_date) between '{start_date}' and '{end_date}'
-        group by 1, 2, 3 order by 2 asc;
-        """
-        # print(sql)
-        df = self.query_to_df(sql)
-        # Returns an unlocalized time
-        # df = df.set_index('start_time').resample('1H').ffill()
-        # df['dollars'] = df['dollars']/24.
-        df.reset_index(inplace=True)
-        df.rename(columns = {'start_time':'hourly_start_time'}, inplace = True)
-        return df
-
-    def cost_of_storage_ts_new(self, start_date='2022-01-01', end_date=''):
-        """
-        Calculates the overall cost of storage usage
-        given time period using Storage Usage Su table.
-        Outputs a dataframe with the fhollowing columns:
-        Category name: Category name as Storage
-        Usage date: The date on which storage is used
-        Dollars used: Total cost of storage (in dollars) used
-        """
-        if not end_date:
-            today_date = date.today()
-            end_date = str(today_date)
-        sql = f"""
             select 'Storage' as category_name
-                ,USAGE_DATE
-                ,((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23) as DOLLARS_USED
-                from kiv.ACCOUNT_USAGE.STORAGE_USAGE
-                where usage_date between '2022-10-10' and '2022-10-12'
+                ,usage_date::timestamp_ltz as start_time
+                ,'Snowflake' as user_name
+                ,0 as credits
+                ,((storage_bytes + stage_bytes + failsafe_bytes)/(1024*1024*1024*1024)*23) as monthly_dollars_run_rate
+                from {self.dbname}.account_usage.storage_usage
+                where date_trunc('day', start_time) between '{start_date}' and '{end_date}'
             """
         # print(sql)
         df = self.query_to_df(sql)
-        
-        # # Returns an unlocalized time
-        # df = df.set_index('start_time').resample('1H').ffill()
-        # df['dollars'] = df['dollars']/24.
-        df.reset_index(inplace=True)
+        df['dollars'] = df.apply(lambda row: row['monthly_dollars_run_rate']/float(monthrange(row['start_time'].year, row['start_time'].month)[1]), axis=1) 
+        df = df.set_index('start_time').resample('1H').ffill()
+        df['dollars'] = df['dollars']/24.
+        df.reset_index(inplace=True, drop=True)
         df.rename(columns = {'start_time':'hourly_start_time'}, inplace = True)
+        df.drop(columns='monthly_dollars_run_rate',inplace=True)
         return df
 
     def cost_by_user_ts(self, start_date='2022-01-01', end_date=''):
