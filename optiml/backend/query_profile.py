@@ -18,19 +18,50 @@ class QueryProfile(SNFLKQuery):
 
         return y
 
-    def get_unique_queries(self, df, metric):
+    def get_unique_queries(self, df):
         df = self.append_query_hash(df)
-        df1 = pd.DataFrame()
-        df1 = df.groupby(['query_hash']).agg({
-                metric:'mean',
+        df = self.append_query_hash(df)
+
+        df_unique = df.groupby(["query_hash","query_text"]).agg({
+                'user_name':lambda x:list(set(x)),
+                'warehouse_name':lambda x:list(set(x)),
+                'query_id':lambda x:list(x),
+                'start_time': lambda x: list(x),
+                'end_time': lambda x: list(x),
+                'execution_status': 'count',
+            })
+        return df_unique
+
+    def get_unique_queries_with_metrics_ordered(self, df, metric):
+        df = self.append_query_hash(df)
+        df_unique = df.groupby(["query_hash", "query_text"]).agg({
                 'credits':'sum',
+                'total_time_elapsed_sec': 'sum',
                 'n_success': 'sum',
                 'n_fail': 'sum',
-                'query_id':lambda x:list(x)}).reset_index()
-        df1.rename(columns={metric: "avg_" + metric, "credits": "total_credits"}, inplace=True)
-        df1.sort_values("total_credits", inplace=True, ascending=False)
-        df1.reset_index(inplace=True, drop=True)
-        return df1
+                'user_name':lambda x:list(set(x)),
+                'warehouse_name':lambda x:list(set(x)),
+                'query_id':lambda x:list(x),
+                'bytes_scanned': lambda x: list(x),
+                'percentage_scanned_from_cache': lambda x: list(x),
+                'bytes_spilled_to_local_storage': lambda x: list(x),
+                'bytes_spilled_to_remote_storage': lambda x: list(x),
+                'percentage_partitions_scanned': lambda x: list(x),
+                'partitions_total': lambda x: list(x),
+                'start_time': lambda x: list(x),
+                'end_time': lambda x: list(x),
+                'compilation_time_sec': lambda x: list(x),
+                'execution_time_sec': lambda x: list(x),
+                'queued_provisioning_time_sec': lambda x: list(x),
+                'queued_repair_time_sec': lambda x: list(x),
+                'queued_overload_time_sec': lambda x: list(x),
+                'list_external_files_time_sec': lambda x: list(x),
+                'execution_status': lambda x: list(x),
+
+            })
+        df_unique.sort_values(metric,inplace=True,ascending=False)
+        df_unique.reset_index()
+        return df_unique
 
     def n_inefficient_queries(self, start_date='', end_date='', n=10, metric='credits', unique=False):
         """Inefficient queries as order by metric. Metric options:
