@@ -373,13 +373,14 @@ class CostProfile(SNFLKQuery):
         where DATE_TRUNC('day', cost.usage_date) between '{start_date}' and '{end_date}'
         group by 1, 2, 3 order by 2 asc;
         """
-        df = self.query_to_df(sql)
-        # Returns an unlocalized time
-        df = df.set_index('start_time').resample('1H').ffill()
-        df['dollars'] = df['dollars']/24.
-        df.reset_index(inplace=True)
-        df.rename(columns = {'start_time':'hourly_start_time'}, inplace = True)
-        return df
+        print(sql)
+        # df = self.query_to_df(sql)
+        # # Returns an unlocalized time
+        # df = df.set_index('start_time').resample('1H').ffill()
+        # df['dollars'] = df['dollars']/24.
+        # df.reset_index(inplace=True)
+        # df.rename(columns = {'start_time':'hourly_start_time'}, inplace = True)
+        # return df
 
     def cost_by_user_ts(self, start_date='2022-01-01', end_date=''):
         ##TODO: @Manasvini to review
