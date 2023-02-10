@@ -6,15 +6,14 @@ import logging
 import datetime
 from pandas import read_sql, DataFrame
 from credentials import *
-
-
 # import pendulum
+
+# ToDo: 1. Get data between two timestamp and save it to pickle or local csv format.
 
 # from src.etl.lib.s3_utils import AnbS3BucketUtils, get_s3_bucket_credentials
 # from src.etl.lib.log_utils import get_logger
 
 # logger = get_logger(__name__)
-
 
 def if_path_exist(func):
     def wrapper_func(data, filename, *args, **kwargs):
@@ -37,7 +36,7 @@ def read_params(param_path):
 def get_query(params, **inputs):
     table = inputs['table'].lower()
     print(f"Getting query for table :: {table}")
-    if table not in params:
+    if table not in params or not inputs['timestamp_col']:
         # raise Exception("Input table is not available")
         print("Input table is not available.")
         return False
@@ -134,8 +133,7 @@ if __name__ == '__main__':
         do_pickle=True)
     params = read_params(param_path=inputs['param_path'])
     for table, values in params.items():
-        inputs["path_to_pickle"] = os.path.join("pickle_data", inputs['table'],
-                                                f"{inputs['table']}_{inputs['end_time']}")
+        inputs["path_to_pickle"] = os.path.join("pickle_data", inputs['table'], f"{inputs['table']}_{inputs['end_time']}")
         inputs['table'] = table
         inputs['timestamp_col'] = values['timestamp_col']
         main(params, **inputs)
