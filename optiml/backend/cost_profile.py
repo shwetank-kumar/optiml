@@ -7,12 +7,12 @@ from calendar import monthrange
 
 ## Function for date time analysis
 ##TODO: Move to a library function
-def get_previous_dates(sdate, edate, date_shift_months):
-    sdate_datetime = datetime.strptime(sdate,'%Y-%m-%d')
-    prev_sdates_datetime = datetime.strptime(sdate,'%Y-%m-%d') - relativedelta(months=date_shift_months)
+def get_previous_dates(sdate, edate, date_shift_weeks):
+    # sdate_datetime = datetime.strptime(sdate,'%Y-%m-%d')
+    prev_sdates_datetime = datetime.strptime(sdate,'%Y-%m-%d') - relativedelta(weeks=date_shift_weeks)
     prev_sdates = prev_sdates_datetime.strftime("%Y-%m-%d")
-    edate_datetime = datetime.strptime(edate,'%Y-%m-%d')
-    prev_edates_datetime = datetime.strptime(edate,'%Y-%m-%d') - relativedelta(months=date_shift_months)
+    # edate_datetime = datetime.strptime(edate,'%Y-%m-%d')
+    prev_edates_datetime = datetime.strptime(edate,'%Y-%m-%d') - relativedelta(weeks=date_shift_weeks)
     prev_edates = prev_edates_datetime.strftime("%Y-%m-%d")
     return prev_sdates, prev_edates
 
@@ -87,11 +87,11 @@ class CostProfile(SNFLKQuery):
         sql = f"""
                 select warehouse_name
                       ,credits_used as credits
-                      ,({credit_val}*credits) as dollars
+                      --,({credit_val}*credits) as dollars
                       ,credits_used_cloud_services as cloud_services_credits
-                      ,({credit_val}*credits_used_cloud_services) as cloud_services_dollars
+                      --,({credit_val}*credits_used_cloud_services) as cloud_services_dollars
                       ,date_trunc('hour', start_time) as hourly_start_time
-                from {self.dbname}.account_usage.warehouse_metering_history
+                from {self.dbname}.warehouse_metering_history
                 where date_trunc('day', start_time) between '{start_date}' and '{end_date}'
                 order by 4 asc;
         """
@@ -128,7 +128,7 @@ class CostProfile(SNFLKQuery):
               ,date_trunc('hour', start_time) as hourly_start_time
               ,'Autoclustering' as category_name
 
-        from {self.dbname}.ACCOUNT_USAGE.AUTOMATIC_CLUSTERING_HISTORY
+        from {self.dbname}.AUTOMATIC_CLUSTERING_HISTORY
         where DATE_TRUNC('day', start_time) between '{start_date}' and '{end_date}'
         group by 1,2,3,6
         order by 6 desc;
@@ -163,7 +163,7 @@ class CostProfile(SNFLKQuery):
                 ,date_trunc('hour',WMH.start_time) as hourly_start_time
                 ,'Cloud services' as category_name
 
-        from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH 
+        from {self.dbname}.WAREHOUSE_METERING_HISTORY WMH 
         where DATE_TRUNC('day', wmh.start_time) between '{start_date}' and '{end_date}'
         order by 4 asc;
         """
@@ -195,7 +195,7 @@ class CostProfile(SNFLKQuery):
             ,({credit_val}*credits_used_compute) as dollars
             ,date_trunc('hour', WMH.start_time) as hourly_start_time
             ,'Compute' as category_name
-         from {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY WMH
+         from {self.dbname}.WAREHOUSE_METERING_HISTORY WMH
          where DATE_TRUNC('day', wmh.start_time) between '{start_date}' and '{end_date}'
          order by 4 asc;      
         """
@@ -233,7 +233,7 @@ class CostProfile(SNFLKQuery):
             ,({credit_val}*credits) as dollars
             ,date_trunc('hour', start_time) as hourly_start_time
             ,'Materialized views' as category_name
-        from {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY
+        from {self.dbname}.MATERIALIZED_VIEW_REFRESH_HISTORY
         where DATE_TRUNC('day', start_time) between '{start_date}' and '{end_date}'
         order by 6 desc;
         """
@@ -266,7 +266,7 @@ class CostProfile(SNFLKQuery):
             ,({credit_val}*credits) as dollars
             ,date_trunc('hour', start_time) as hourly_start_time
             ,'Replication' as category_name
-        from {self.dbname}.ACCOUNT_USAGE.REPLICATION_USAGE_HISTORY
+        from {self.dbname}.REPLICATION_USAGE_HISTORY
         where DATE_TRUNC('day', start_time) between '{start_date}' and '{end_date}'
         order by 4 desc;
         """
@@ -301,7 +301,7 @@ class CostProfile(SNFLKQuery):
             ,date_trunc('hour', start_time) as hourly_start_time
             ,'Snowflake' as user_name
             ,'Search optimization' as category_name
-        from {self.dbname}.ACCOUNT_USAGE.MATERIALIZED_VIEW_REFRESH_HISTORY
+        from {self.dbname}.MATERIALIZED_VIEW_REFRESH_HISTORY
         where DATE_TRUNC('day', start_time) between '{start_date}' and '{end_date}'
         order by 6 desc;"""
 
@@ -334,53 +334,13 @@ class CostProfile(SNFLKQuery):
             ,date_trunc('hour', start_time) as hourly_start_time
             ,({credit_val}*credits) as dollars
             ,'Snowpipe' as category_name
-          from {self.dbname}.ACCOUNT_USAGE.PIPE_USAGE_HISTORY
+          from {self.dbname}.PIPE_USAGE_HISTORY
           where DATE_TRUNC('day', start_time) between '{start_date}' and '{end_date}'
           order by 1 desc;
         """
-        
         df = self.query_to_df(sql)
         return df
 
-    # @simple_cache
-    # def cost_of_storage_ts(self, start_date='2022-01-01', end_date=''):
-    #     """
-    #     Calculates the overall cost of storage usage
-    #     given time period using Storage Usage Su table.
-    #     Outputs a dataframe with the fhollowing columns:
-    #     Category name: Category name as Storage
-    #     Usage date: The date on which storage is used
-    #     Dollars used: Total cost of storage (in dollars) used
-    #     """
-    #     if not end_date:
-    #         today_date = date.today()
-    #         end_date = str(today_date)
-    #     sql = f"""
-    #     select 
-    #         cost.category_name
-    #         ,cost.USAGE_DATE::timestamp_ltz as start_time
-    #         ,cost.DOLLARS_USED as dollars
-    #         ,'Snowflake' as user_name
-    #         ,0 as credits from (
-    #         select
-    #                 'Storage' as category_name
-    #                 ,SU.USAGE_DATE
-    #                 ,((STORAGE_BYTES + STAGE_BYTES + FAILSAFE_BYTES)/(1024*1024*1024*1024)*23)/DA.DAYS_IN_MONTH as DOLLARS_USED
-    #         from    {self.dbname}.ACCOUNT_USAGE.STORAGE_USAGE SU
-    #         JOIN    (SELECT COUNT(*) AS DAYS_IN_MONTH,TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01') as DATE_MONTH
-    #         FROM SNOWFLAKE_SAMPLE_DATA.TPCDS_SF10TCL.DATE_DIM
-    #         GROUP BY TO_DATE(DATE_PART('year',D_DATE)||'-'||DATE_PART('month',D_DATE)||'-01')) DA
-    #         ON DA.DATE_MONTH = TO_DATE(DATE_PART('year',USAGE_DATE)||'-'||DATE_PART('month',USAGE_DATE)||'-01')) as cost
-    #     where date_trunc('day', cost.usage_date) between '{start_date}' and '{end_date}'
-    #     group by 1, 2, 3 order by 2 asc;
-    #     """
-    #     # print(sql)
-    #     df = self.query_to_df(sql)
-    #     df = df.set_index('start_time').resample('1H').ffill()
-    #     df['dollars'] = df['dollars']/24.
-    #     df.reset_index(inplace=True, drop=True)
-    #     df.rename(columns = {'start_time':'hourly_start_time'}, inplace = True)
-    #     return df
 
     def cost_of_storage_ts(self, start_date='2022-01-01', end_date=''):
         """
@@ -400,7 +360,7 @@ class CostProfile(SNFLKQuery):
                 ,'Snowflake' as user_name
                 ,0 as credits
                 ,((storage_bytes + stage_bytes + failsafe_bytes)/(1024*1024*1024*1024)*23) as monthly_dollars_run_rate
-                from {self.dbname}.account_usage.storage_usage
+                from {self.dbname}.storage_usage
                 where date_trunc('day', start_time) between '{start_date}' and '{end_date}'
             """
         # print(sql)
@@ -433,7 +393,7 @@ class CostProfile(SNFLKQuery):
                 ,WAREHOUSE_NAME
                 ,DATE_TRUNC('hour',START_TIME) as hourly_start_time
                 ,SUM(EXECUTION_TIME)  as USER_HOUR_EXECUTION_TIME
-                FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
+                FROM {self.dbname}.QUERY_HISTORY QH
                 WHERE WAREHOUSE_NAME IS NOT NULL
                 AND EXECUTION_TIME > 0
             
@@ -456,13 +416,13 @@ class CostProfile(SNFLKQuery):
                 ,A.hourly_start_time as hourly_start_time
                 FROM USER_HOUR_EXECUTION_CTE A
                 JOIN HOUR_EXECUTION_CTE B  ON A.hourly_start_time = B.hourly_start_time and B.WAREHOUSE_NAME = A.WAREHOUSE_NAME
-                JOIN {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY C ON C.WAREHOUSE_NAME = A.WAREHOUSE_NAME AND C.START_TIME = A.hourly_start_time
+                JOIN {self.dbname}.WAREHOUSE_METERING_HISTORY C ON C.WAREHOUSE_NAME = A.WAREHOUSE_NAME AND C.START_TIME = A.hourly_start_time
             )
 
             SELECT 
             USER_NAME
             ,WAREHOUSE_NAME
-            ,SUM(APPROXIMATE_CREDITS_USED) AS APPROXIMATE_CREDITS_USED
+            ,SUM(APPROXIMATE_CREDITS_USED) AS APPROXIMATE_CREDITS
             ,hourly_start_time
             FROM APPROXIMATE_CREDITS
             GROUP BY 1,2,4
@@ -504,8 +464,8 @@ class CostProfile(SNFLKQuery):
                 ,WAREHOUSE_NAME
                 ,DATE_TRUNC('hour',START_TIME) as hourly_start_time
                 ,SUM(EXECUTION_TIME)  as CLIENT_HOUR_EXECUTION_TIME
-                FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
-                JOIN {self.dbname}.ACCOUNT_USAGE.SESSIONS SE ON SE.SESSION_ID = QH.SESSION_ID
+                FROM {self.dbname}.QUERY_HISTORY QH
+                JOIN {self.dbname}.SESSIONS SE ON SE.SESSION_ID = QH.SESSION_ID
                 WHERE WAREHOUSE_NAME IS NOT NULL
                 AND EXECUTION_TIME > 0
             
@@ -520,23 +480,23 @@ class CostProfile(SNFLKQuery):
                 FROM CLIENT_HOUR_EXECUTION_CTE
                 group by 1,2
             )
-            , APPROXIMATE_CREDITS AS (
+            , APPROXIMATE_CREDITS_USED AS (
                 SELECT 
                 A.CLIENT_APPLICATION_NAME
                 ,C.WAREHOUSE_NAME
-                ,(A.CLIENT_HOUR_EXECUTION_TIME/B.HOUR_EXECUTION_TIME)*C.CREDITS_USED AS APPROXIMATE_CREDITS_USED
+                ,(A.CLIENT_HOUR_EXECUTION_TIME/B.HOUR_EXECUTION_TIME)*C.CREDITS_USED AS APPROXIMATE_CREDITS
                 ,A.hourly_start_time as hourly_start_time
                 FROM CLIENT_HOUR_EXECUTION_CTE A
                 JOIN HOUR_EXECUTION_CTE B  ON A.hourly_start_time = B.hourly_start_time and B.WAREHOUSE_NAME = A.WAREHOUSE_NAME
-                JOIN {self.dbname}.ACCOUNT_USAGE.WAREHOUSE_METERING_HISTORY C ON C.WAREHOUSE_NAME = A.WAREHOUSE_NAME AND C.START_TIME = A.hourly_start_time
+                JOIN {self.dbname}.WAREHOUSE_METERING_HISTORY C ON C.WAREHOUSE_NAME = A.WAREHOUSE_NAME AND C.START_TIME = A.hourly_start_time
             )
 
             SELECT 
             CLIENT_APPLICATION_NAME
             ,WAREHOUSE_NAME
-            ,SUM(APPROXIMATE_CREDITS_USED) AS APPROXIMATE_CREDITS_USED
+            ,SUM(APPROXIMATE_CREDITS) AS APPROXIMATE_CREDITS
             ,hourly_start_time
-            FROM APPROXIMATE_CREDITS
+            FROM APPROXIMATE_CREDITS_USED
             GROUP BY 1,2,4
             ORDER BY 3 DESC
             ;

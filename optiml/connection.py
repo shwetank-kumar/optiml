@@ -68,7 +68,8 @@ class SnowflakeConnConfig:
 
 
     def create_connection(self):
-        print("Connecting...")
         conn_args = {self.CONN_ARGNAME_MAP[k] : v
                      for k,v in self.config.items()}
-        return snowflake.connector.connect(**conn_args)
+        connection_obj = snowflake.connector.connect(**conn_args)
+        print("Connected to Snowflake.")
+        return connection_obj
