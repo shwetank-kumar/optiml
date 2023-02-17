@@ -141,7 +141,7 @@ class QueryProfile(SNFLKQuery):
             qh.execution_status,
             round((qh.execution_time/(1000*60*60))*ws.nodes,2) as credits
 
-        from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
+        from {self.dbname}.QUERY_HISTORY QH
         join WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
         where date_trunc('day', qh.start_time) between '{start_date}' and '{end_date}'
         order by {metric} desc
@@ -171,7 +171,7 @@ class QueryProfile(SNFLKQuery):
                 date_trunc('day', qh.start_time) as day,
                 count(*) as counts
             from 
-                {self.dbname}.account_usage.query_history qh
+                {self.dbname}.query_history qh
             where 
                 date_trunc('day', qh.start_time) between '{start_date}' and '{end_date}'
             group by 
@@ -229,7 +229,7 @@ class QueryProfile(SNFLKQuery):
         ,sum(Q.PARTITIONS_SCANNED) as PARTITIONS_SCANNED
         ,sum(Q.PARTITIONS_TOTAL) as PARTITIONS_TOTAL
         ,max(Q.cluster_number)
-        from {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY Q
+        from {self.dbname}.QUERY_HISTORY Q
         where 1=1
         and QUERY_TYPE='SELECT'
         and TO_DATE(Q.START_TIME) between '{start_date}' and '{end_date}'
@@ -248,14 +248,14 @@ class QueryProfile(SNFLKQuery):
     def queries_full_table_scan(self, start_date='2022-01-01',end_date='',n=10):
         """
         Shows the queries with near full table scans
-        Outputs a dataframe with all the columns in ACCOUNT_USAGE.QUERY_HISTORY
+        Outputs a dataframe with all the columns in QUERY_HISTORY
         """
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
         sql=f"""
         SELECT * 
-        FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY
+        FROM {self.dbname}.QUERY_HISTORY
         WHERE START_TIME between '{start_date}' and '{end_date}'
         AND PARTITIONS_SCANNED > (PARTITIONS_TOTAL*0.95)
         AND QUERY_TYPE NOT LIKE 'CREATE%'
@@ -305,7 +305,7 @@ class QueryProfile(SNFLKQuery):
         QUEUED_OVERLOAD_TIME,
         QUEUED_PROVISIONING_TIME,
         QUEUED_REPAIR_TIME
-        FROM {self.dbname}.ACCOUNT_USAGE.QUERY_HISTORY QH
+        FROM {self.dbname}.QUERY_HISTORY QH
         JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
         where START_TIME between '{start_date}' and '{end_date}'
         and warehouse_name='{wh_name}'
@@ -317,7 +317,7 @@ class QueryProfile(SNFLKQuery):
     def query_id_to_details(self, query_id):
         sql = f"""
             select * 
-            from {self.dbname}.account_usage.query_history
+            from {self.dbname}.query_history
             WHERE query_id='{query_id}'
         """
         df = self.query_to_df(sql)
@@ -363,7 +363,7 @@ class QueryProfile(SNFLKQuery):
             round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
             round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
             round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
-                from {self.dbname}.account_usage.query_history qh
+                from {self.dbname}.query_history qh
                 where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
                 and qh.warehouse_name='{kwargs['wh']}' and qh.user_name='{kwargs['user']}'
                 and qh.execution_status='{kwargs['es']}'
@@ -397,7 +397,7 @@ class QueryProfile(SNFLKQuery):
             round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
             round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
             round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
-            from {self.dbname}.account_usage.query_history qh
+            from {self.dbname}.query_history qh
             where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
             and qh.warehouse_name='{kwargs['wh']}' and qh.execution_status='{kwargs['es']}'
             limit {n};
@@ -430,7 +430,7 @@ class QueryProfile(SNFLKQuery):
             round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
             round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
             round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
-                from {self.dbname}.account_usage.query_history qh
+                from {self.dbname}.query_history qh
                 where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
                 and qh.warehouse_name='{kwargs['wh']}' and qh.user_name='{kwargs['user']}'
                 limit {n};
@@ -463,7 +463,7 @@ class QueryProfile(SNFLKQuery):
             round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
             round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
             round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
-                from {self.dbname}.account_usage.query_history qh
+                from {self.dbname}.query_history qh
                 where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
                 and qh.execution_status='{kwargs['es']}' and qh.user_name='{kwargs['user']}'
                 limit {n};
@@ -496,7 +496,7 @@ class QueryProfile(SNFLKQuery):
             round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
             round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
             round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
-                from {self.dbname}.account_usage.query_history qh
+                from {self.dbname}.query_history qh
                 where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
                 and qh.execution_status='{kwargs['es']}' and qh.warehouse_name='{kwargs['wh']}'
                 limit {n};
@@ -529,7 +529,7 @@ class QueryProfile(SNFLKQuery):
             round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
             round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
             round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
-                from {self.dbname}.account_usage.query_history qh
+                from {self.dbname}.query_history qh
                 where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
                 and qh.warehouse_name='{kwargs['wh']}'
                 limit {n};
@@ -562,7 +562,7 @@ class QueryProfile(SNFLKQuery):
             round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
             round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
             round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
-                from {self.dbname}.account_usage.query_history qh
+                from {self.dbname}.query_history qh
                 where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
                 and qh.user_name='{kwargs['user']}'
                 limit {n};
@@ -595,7 +595,7 @@ class QueryProfile(SNFLKQuery):
             round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
             round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
             round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
-                from {self.dbname}.account_usage.query_history qh
+                from {self.dbname}.query_history qh
                 where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
                 and qh.execution_status='{kwargs['es']}'
                 limit {n};
@@ -628,7 +628,7 @@ class QueryProfile(SNFLKQuery):
             round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
             round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
             round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
-                from {self.dbname}.account_usage.query_history qh
+                from {self.dbname}.query_history qh
                 where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
                 limit {n};
             """
