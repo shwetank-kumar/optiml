@@ -9,3 +9,5 @@ notebooks/knot/.ipynb_checkpoints
 .DS_Store
 *.pyc
 notebooks/kiva/prod/.ipynb_checkpoints
+notebooks/kiva/cost_analysis_practice.ipynb
+.idea/
