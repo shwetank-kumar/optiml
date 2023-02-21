@@ -1,6 +1,7 @@
 import os
 import streamlit as st
 import pandas as pd
+
 from tabulate import tabulate
 import plotly.express as px
 import plotly.graph_objects as go
@@ -439,7 +440,22 @@ def plot_partner_df(partner_tool_df):
             'xanchor': 'center',
             'yanchor': 'top'})
 
-    return df_by_pt, fig
+    df_by_pt_ts = partner_tool_df.groupby(['client_application_name', 'hourly_start_time']).sum(
+        'numeric_only').reset_index()
+    ts_fig = px.area(df_by_pt_ts, x="hourly_start_time", y="approximate_credits", color="client_application_name",
+                     color_discrete_sequence=color_scheme)
+    ts_fig.update_layout(
+        title={
+            'text': "Timeseries of cost by partner tools",
+            'y': 0.95,
+            'x': 0.5,
+            'xanchor': 'center',
+            'yanchor': 'top'},
+        xaxis_title="Hourly start time (UTC)",
+        yaxis_title="Credits used (approx.)"
+    )
+
+    return df_by_pt, fig, ts_fig
 
 
 def plot_cost_by_warehouse(cost_by_wh):
@@ -632,11 +648,15 @@ def show_dashboard(**kwargs):
     # prev_cost_df = total_cost_prev_month()
     # curr_cost_df = total_cost_curr_month(total_cost_df)
     row1_cols = st.columns([1, 1])
-    row1_cols[0].write('Credit and dollar usage by category (Previous month)')
+    row1_cols[0].write('Credit and dollar usage by category (Previous Week)')
     total_usage = df_cost_by_usage(sdate, edate)
+    total_usage = total_usage.round({"credits_previous_week": 2, "dollars_previous_week": 2, })
+    total_usage[['credits_previous_week', 'dollars_previous_week']] = total_usage[
+        ['credits_previous_week', 'dollars_previous_week']].apply(lambda x: round(x, 2),result_type='expand')
+    total_usage.round(decimals={'credits_previous_week': 2})
     row1_cols[0].dataframe(total_usage[["category_name", "credits_previous_week", "dollars_previous_week"]],
                            use_container_width=True)
-    row1_cols[1].write('Credit and dollar usage by category (Current month)')
+    row1_cols[1].write('Credit and dollar usage by category (Current Week)')
     row1_cols[1].dataframe(total_usage[['category_name', 'credits', 'dollars']], use_container_width=True)
     st.success(""" Comparison of metric from previous month.""")
     metric1, metric2, metric3, metric4, metric5 = st.columns(5)
@@ -669,6 +689,11 @@ def show_dashboard(**kwargs):
     st.warning("Resource usage by :: Warehouse.")
     df_by_wh_print, fig, ts_fig = plot_warehouse_df(cost_by_wh_df)
     wh_cols = st.columns([1, 1])
+
+    wh_cols[0].write("")
+    wh_cols[0].write("")
+    wh_cols[0].write("")
+    wh_cols[0].subheader("Total cost by warehouse")
     wh_cols[0].dataframe(df_by_wh_print, use_container_width=True)
     wh_cols[1].plotly_chart(fig, use_container_width=True)
     st.subheader("Timeseries plot for cost by Warehouse")
@@ -676,9 +701,14 @@ def show_dashboard(**kwargs):
     # st.plotly_chart(plot_cost_by_warehouse(cost_by_wh_df), use_container_width=True)
     st.warning("Resource usage ::  Partner Tools.")
     st.write("")
-    df_by_pt, fig = plot_partner_df(cost_by_partner_tools_df)
+    df_by_pt, fig, ts_fig = plot_partner_df(cost_by_partner_tools_df)
     partner_cols = st.columns([1.5, 1])
+    partner_cols[0].write("")
+    partner_cols[0].subheader("Cost by Partner Tools")
+    partner_cols[0].write("")
+    partner_cols[0].write("")
     partner_cols[0].dataframe(df_by_pt, use_container_width=True)
+    partner_cols[1].plotly_chart(fig, use_container_width=True)
     st.subheader("Timeseries plot for cost by Partner Tools")
     st.plotly_chart(ts_fig, use_container_width=True)
     # st.plotly_chart(plot_cost_by_partner_tools(cost_by_partner_tools_df), use_container_width=True)

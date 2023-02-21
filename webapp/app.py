@@ -3,7 +3,7 @@ import pathlib, sys
 dir_path = str(pathlib.Path.cwd().parent)
 print("Dirpath:  ", dir_path)
 sys.path.append(dir_path)
-
+import pandas as pd
 from homepage import Homepage
 from dashboard import show_dashboard
 import streamlit as st
@@ -12,7 +12,8 @@ from streamlit_option_menu import option_menu
 import sys, pathlib, os
 from optiml.backend.cost_profile import CostProfile, get_previous_dates
 from optiml.connection import SnowflakeConnConfig
-
+pd.set_option('precision', 2)
+pd.set_option('float_format', '{:.2f}'.format)
 connection = SnowflakeConnConfig(accountname='jg84276.us-central1.gcp', warehousename="XSMALL_WH").create_connection()
 Schema = "KIV.ACCOUNT_USAGE"
 cqlib = CostProfile(connection, Schema)
