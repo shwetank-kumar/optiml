@@ -9,11 +9,11 @@ from calendar import monthrange
 ##TODO: Move to a library function
 def get_previous_dates(sdate, edate, date_shift_weeks):
     # sdate_datetime = datetime.strptime(sdate,'%Y-%m-%d')
-    prev_sdates_datetime = datetime.strptime(sdate,'%Y-%m-%d') - relativedelta(weeks=date_shift_weeks)
-    prev_sdates = prev_sdates_datetime.strftime("%Y-%m-%d")
+    prev_sdates = sdate - relativedelta(weeks=date_shift_weeks)
+    # prev_sdates = prev_sdates_datetime.strftime("%Y-%m-%d")
     # edate_datetime = datetime.strptime(edate,'%Y-%m-%d')
-    prev_edates_datetime = datetime.strptime(edate,'%Y-%m-%d') - relativedelta(weeks=date_shift_weeks)
-    prev_edates = prev_edates_datetime.strftime("%Y-%m-%d")
+    prev_edates = edate - relativedelta(weeks=date_shift_weeks)
+    # prev_edates = prev_edates_datetime.strftime("%Y-%m-%d")
     return prev_sdates, prev_edates
 
 class CostProfile(SNFLKQuery):
