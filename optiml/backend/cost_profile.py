@@ -4,6 +4,7 @@ import pandas as pd
 from datetime import datetime, date
 from dateutil.relativedelta import relativedelta
 from calendar import monthrange
+import textwrap as tw
 
 ## Function for date time analysis
 ##TODO: Move to a library function
@@ -510,7 +511,6 @@ class CostProfile(SNFLKQuery):
         df = self.aggregate_by_day(df)
         return df
 
-
     
     def aggregate_by_day(self, df):
         df["date"] = pd.to_datetime(df["hourly_start_time"])
@@ -519,3 +519,46 @@ class CostProfile(SNFLKQuery):
         df_daily = df.resample('D').sum()
         df_daily.reset_index(inplace=True)
         return df_daily
+
+
+    def generate_resource_monitor_sql(self,\
+                            resource_monitor_name="monitor_1",\
+                            credit_quota=10,\
+                            periodicity="weekly",\
+                            start_timestamp_ltz="2023-02-18 00:00:00 PST",\
+                            percentage_of_monitor=100,\
+                            action="notify",\
+                            warehouse_name="warehouse_1"):
+        """Generates the SQL to create resource monitor for each warehouse given the parameters"""
+    
+        resource_monitor_sql = tw.dedent(f"""
+                                USE ROLE ACCOUNTADMIN;
+                                CREATE OR REPLACE RESOURCE MONITOR {resource_monitor_name} 
+                                WITH CREDIT_QUOTA={credit_quota}
+                                FREQUENCY={periodicity}
+                                START_TIMESTAMP={start_timestamp_ltz}
+                                TRIGGERS ON {percentage_of_monitor} PERCENT DO {action};
+                                ALTER WAREHOUSE {warehouse_name} SET RESOURCE_MONITOR={resource_monitor_name};
+                                """)
+        return resource_monitor_sql
+
+
+    def get_resource_monitor_values(self, df_compute):
+        """Generates the values for resource monitor given dataframe continaing the training data"""
+        # df_compute = cqlib.cost_of_compute_ts(ts,te)
+        df_compute.drop(df_compute.loc[df_compute['warehouse_name']=="CLOUD_SERVICES_ONLY"].index, inplace=True)
+        df_by_wh_day = df_compute.groupby([
+                    pd.Grouper(key='hourly_start_time', axis=0, freq='D', sort=True),
+                    pd.Grouper('warehouse_name')
+                ]).sum()
+        df_by_wh_day.reset_index(inplace=True)
+        df_by_wh_day.rename(columns={"hourly_start_time": "day"}, errors="raise", inplace=True)
+        df_stats_by_wh_day = df_by_wh_day.groupby("warehouse_name")["credits"].agg(['mean', 'std'])
+        df_stats_by_wh_day.reset_index(inplace=True)
+        df_stats_by_wh_day["credits_three_sigma_plus"] = df_stats_by_wh_day["mean"]+3*df_stats_by_wh_day["std"]
+        df_stats_by_wh_day["credits_three_sigma_minus"] = df_stats_by_wh_day["mean"]-3*df_stats_by_wh_day["std"]
+        df_stats_by_wh_day["credits_three_sigma_minus"] = df_stats_by_wh_day["credits_three_sigma_minus"].clip(0, None)
+        df_stats_by_wh_day = df_stats_by_wh_day.round(2)
+        df_stats_by_wh_day.drop(columns=["mean", "std"],inplace=True)
+        df_stats_by_wh_day.reset_index(inplace=True,drop=True)
+        return df_by_wh_day, df_stats_by_wh_day
