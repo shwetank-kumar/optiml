@@ -145,6 +145,46 @@ class WarehouseProfile(SNFLKQuery):
         df = find_queries[find_queries['hourly_start_time'].isin(matched_list)]
         return df
 
+# WH events over a period of time
+    
+    def wh_events(self,start_datetime="2022-10-01 12:00:00", end_datetime="2022-10-01 19:00:00", warehouse_name=None):
+        """
+        Displays all the events on the WAREHOUSE_EVENTS_HISTORY tables in a period of time
+        """
+        if not end_datetime:
+            today_date = date.today()
+            end_datetime = str(today_date)
+
+        if not warehouse_name:
+            warehouse_name = "warehouse_name"
+
+        sql=f"""
+            select *
+            from {self.dbname}.warehouse_events_history
+            where date_trunc('second', timestamp) between '{start_datetime}' and '{end_datetime}'
+            AND warehouse_name={warehouse_name}
+        """
+        df=self.query_to_df(sql)
+        return df
+
+# WH credits per houw
+    
+    def wh_credits_per_hour(self,start_datetime="2022-10-01", end_datetime="2022-10-02",wh_name='PROD_WH'):
+        """
+        Displays credits consumed per hour by warehouse
+        """
+        if not end_datetime:
+            today_date = date.today()
+            end_datetime = str(today_date)
+
+        sql=f"""
+            select *
+            from {self.dbname}.warehouse_metering_history
+            where date_trunc('second', start_time) between '{start_datetime}' and '{end_datetime}'
+        """
+        df=self.query_to_df(sql)
+        return df
+
     
 
 
