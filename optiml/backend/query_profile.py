@@ -636,4 +636,82 @@ class QueryProfile(SNFLKQuery):
 
         df = self.query_to_df(sql)
         return df
+
+    def n_inefficient_queries_v2(self, start_date='', end_date='', n=10, metric='credits', unique=False):        
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        
+        credit_val = ''
+        if self.credit_value:
+            credit_val = SNFLKQuery.credit_values[self.credit_value]
+
+        sql = f"""
+        WITH WAREHOUSE_SIZE AS
+        (
+            SELECT WAREHOUSE_SIZE, NODES
+            FROM (
+                    SELECT 'X-SMALL' AS WAREHOUSE_SIZE, 1 AS NODES
+                    UNION ALL
+                    SELECT 'SMALL' AS WAREHOUSE_SIZE, 2 AS NODES
+                    UNION ALL
+                    SELECT 'MEDIUM' AS WAREHOUSE_SIZE, 4 AS NODES
+                    UNION ALL
+                    SELECT 'LARGE' AS WAREHOUSE_SIZE, 8 AS NODES
+                    UNION ALL
+                    SELECT 'XLARGE' AS WAREHOUSE_SIZE, 16 AS NODES
+                    UNION ALL
+                    SELECT '2XLARGE' AS WAREHOUSE_SIZE, 32 AS NODES
+                    UNION ALL
+                    SELECT '3XLARGE' AS WAREHOUSE_SIZE, 64 AS NODES
+                    UNION ALL
+                    SELECT '4XLARGE' AS WAREHOUSE_SIZE, 128 AS NODES
+                    )
+        )
+            select 
+            HASH(qh.query_text) as query_hash,
+            qh.query_text,
+            qh.warehouse_name,
+            qh.user_name,
+            sum(round((qh.execution_time/(1000*60*60))*ws.nodes,2)) as credits
+        from {self.dbname}.QUERY_HISTORY qh
+        join WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
+        where date_trunc('day', qh.start_time) between '{start_date}' and '{end_date}'
+        group by 1,2,3,4
+        order by {metric} desc
+        limit {n}   
+        """
+        df = self.query_to_df(sql)
+        return df
+
+
+    def n_most_executed_select_queries_v2(self, start_date='',end_date='', n=10):
+        if not end_date:
+            today_date = date.today()
+            end_date = str(today_date)
+        sql=f"""
+
+        SELECT 
+        HASH(Q.QUERY_TEXT) as query_hash
+        ,Q.QUERY_TEXT
+        ,Q.warehouse_name
+        ,Q.user_name
+        ,count(*) as number_of_queries
+        ,sum(Q.TOTAL_ELAPSED_TIME)/1000 as execution_seconds
+        ,execution_seconds/number_of_queries as average_execution_seconds
+        from {self.dbname}.QUERY_HISTORY Q
+        where 
+        QUERY_TYPE='SELECT'
+        and TO_DATE(Q.START_TIME) between '{start_date}' and '{end_date}'
+        and TOTAL_ELAPSED_TIME > 0 --only get queries that actually used compute
+        group by 1,2,3,4
+        having number_of_queries >= 10 --configurable/minimal threshold
+        and execution_seconds/number_of_queries > 5 --only queries that run for over 5 seconds
+        order by 4 desc
+        limit {n} --configurable upper bound threshold
+        ;
+        """
+        df=self.query_to_df(sql)
+        df['query_hash'] = df['query_hash'].apply(str)
+        return df
     
