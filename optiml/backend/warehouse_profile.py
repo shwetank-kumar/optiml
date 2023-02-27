@@ -6,7 +6,7 @@ class WarehouseProfile(SNFLKQuery):
     ## Config related queries
     def warehouse_config(self):
         """Gives the details of the wareouse config"""
-        sql = f"""select * from {self.dbname}.account_usage.warehouses"""
+        sql = f"""select * from {self.dbname}.warehouses"""
         df = self.query_to_df(sql)
         return df
 
@@ -20,19 +20,22 @@ class WarehouseProfile(SNFLKQuery):
         if not end_date:
             today_date = date.today()
             end_date = str(today_date)
-        sql=f"""
-        
+
+        sql = f"""
         WITH wlh as (
         SELECT DATE_TRUNC('{delta}', wl.start_time) hourly_start_time,
-        AVG(avg_running) avg_running_load, AVG(avg_queued_load) avg_queued_load 
-        FROM {self.dbname}.account_usage.warehouse_load_history wl
+        AVG(avg_running) avg_running_load, 
+        AVG(avg_queued_load) avg_queued_load
+        FROM {self.dbname}.warehouse_load_history wl
         WHERE DATE_TRUNC('DAY', wl.start_time) between'{start_date}' and '{end_date}'
         AND wl.warehouse_name = '{wh_name}'
         GROUP BY  hourly_start_time
         ORDER BY hourly_start_time asc
         ),
-        wmh AS (SELECT DATE_TRUNC('{delta}', wm.start_time) hourly_start_time, credits_used
-           FROM {self.dbname}.account_usage.warehouse_metering_history wm
+        wmh AS (
+            SELECT DATE_TRUNC('{delta}', wm.start_time) hourly_start_time, 
+            round(avg(credits_used),2) as avg_credits
+           FROM {self.dbname}.warehouse_metering_history wm
           WHERE DATE_TRUNC('DAY', wm.start_time) between '{start_date}' and '{end_date}'
             AND wm.warehouse_name = '{wh_name}'
             ORDER BY hourly_start_time ASC
@@ -45,7 +48,7 @@ class WarehouseProfile(SNFLKQuery):
         AVG(queued_provisioning_time) avg_queued_provisioning_time,
         AVG(queued_repair_time) avg_queued_repair_time,
         AVG(queued_overload_time) avg_queued_overload_time
-        FROM {self.dbname}.account_usage.query_history qh
+        FROM {self.dbname}.query_history qh
         WHERE DATE_TRUNC('DAY', qh.start_time) between '{start_date}' and '{end_date}'
         AND qh.warehouse_name = '{wh_name}'
         GROUP BY  hourly_start_time
@@ -53,8 +56,9 @@ class WarehouseProfile(SNFLKQuery):
         )
         SELECT wlh.hourly_start_time, 
         wlh.avg_running_load, 
-        wlh.avg_queued_load, 
-        wmh.credits_used, 
+        wlh.avg_queued_load,
+        wmh.avg_credits,
+        round(wlh.avg_running_load / wmh.avg_credits * 100,2) as avg_efficiency, 
         qh.query_count,
         qh.avg_compilation_time,
         qh.avg_execution_time,
@@ -66,6 +70,87 @@ class WarehouseProfile(SNFLKQuery):
         df=self.query_to_df(sql)
         return df
 
+    # def wh_queued_load_ts(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH',delta='minute'):
+    #     """"
+    #     Displays avg_running_load, avg_queued_load,hourly_start_time for given warehouse in a given time period from warehouse load history table.
+    #     Displays count of queries, average execution time, average provisioning time, average compilation time, average queued overload time
+    #     for queries running in a given time period for given warehouse from query history table.
+    #     Displays credits used by given warehouse in tim period from warehouse metering table.
+    #     """
+    #     if not end_date:
+    #         today_date = date.today()
+    #         end_date = str(today_date)
+    #     sql=f"""
+        
+    #     WITH wlh as (
+    #     SELECT DATE_TRUNC('{delta}', wl.start_time) hourly_start_time,
+    #     AVG(avg_running) avg_running_load, AVG(avg_queued_load) avg_queued_load 
+    #     FROM {self.dbname}.warehouse_load_history wl
+    #     WHERE DATE_TRUNC('DAY', wl.start_time) between'{start_date}' and '{end_date}'
+    #     AND wl.warehouse_name = '{wh_name}'
+    #     GROUP BY  hourly_start_time
+    #     ORDER BY hourly_start_time asc
+    #     ),
+    #     wmh AS (SELECT DATE_TRUNC('{delta}', wm.start_time) hourly_start_time, credits_used
+    #        FROM {self.dbname}.warehouse_metering_history wm
+    #       WHERE DATE_TRUNC('DAY', wm.start_time) between '{start_date}' and '{end_date}'
+    #         AND wm.warehouse_name = '{wh_name}'
+    #         ORDER BY hourly_start_time ASC
+    #     ),
+    #     qh as (
+    #     SELECT DATE_TRUNC('{delta}', qh.start_time) hourly_start_time, 
+    #     COUNT(*) query_count,
+    #     AVG(compilation_time) avg_compilation_time,
+    #     AVG(execution_time) avg_execution_time,
+    #     AVG(queued_provisioning_time) avg_queued_provisioning_time,
+    #     AVG(queued_repair_time) avg_queued_repair_time,
+    #     AVG(queued_overload_time) avg_queued_overload_time
+    #     FROM {self.dbname}.query_history qh
+    #     WHERE DATE_TRUNC('DAY', qh.start_time) between '{start_date}' and '{end_date}'
+    #     AND qh.warehouse_name = '{wh_name}'
+    #     GROUP BY  hourly_start_time
+    #     ORDER BY  hourly_start_time
+    #     )
+    #     SELECT wlh.hourly_start_time, 
+    #     wlh.avg_running_load, 
+    #     wlh.avg_queued_load, 
+    #     wmh.credits_used, 
+    #     qh.query_count,
+    #     qh.avg_compilation_time,
+    #     qh.avg_execution_time,
+    #     qh.avg_queued_overload_time
+    #     FROM wlh, wmh, qh
+    #     WHERE wlh.hourly_start_time = wmh.hourly_start_time
+    #     AND qh.hourly_start_time = wmh.hourly_start_time
+    #     """
+    #     df=self.query_to_df(sql)
+    #     return df
+    
+    # def wh_efficiency(self, start_datetime="2022-10-01", end_datetime="2022-10-02", warehouse_name='PROD_WH'):
+    #     sql = f"""
+    #         with cte as (
+    #         select date_trunc('second', start_time) as start_time, end_time, warehouse_name, credits_used
+    #         from {self.dbname}.warehouse_metering_history
+    #         where warehouse_name = '{warehouse_name}'
+    #         and date_trunc('hour', start_time) between '{start_datetime}' and '{end_datetime}')
+    #         select date_trunc('second', a.start_time) as start_time, 
+    #         round(avg(AVG_RUNNING),2) as avg_running, 
+    #         round(avg(credits_used),2) as avg_credits, 
+    #         round(avg(AVG_RUNNING) / avg(credits_used) * 100,2) as avg_efficiency
+    #         from {self.dbname}.warehouse_load_history a
+    #         join cte b on a.start_time = date_trunc('hour', a.start_time)
+    #         where a.warehouse_name = '{warehouse_name}'
+    #         and date_trunc('second', a.start_time) between '{start_datetime}' and '{end_datetime}'
+    #         group by 1
+    #         order by 1;
+    #     """
+        
+    #     df = self.query_to_df(sql)
+    #     df["warehouse_name"] = warehouse_name
+        
+    #     return df
+    
+
     def wh_analysis(self,start_date="2022-01-01", end_date="",delta='hour',wh_name='DEV_WH',n=2):
         """
         Displays hourly start time and average queued load for average queued load value greater than inputted threshold.
@@ -75,7 +160,7 @@ class WarehouseProfile(SNFLKQuery):
             end_date = str(today_date)
         sql=f"""
         SELECT DATE_TRUNC('{delta}', wl.start_time) hourly_start_time, AVG(avg_queued_load) as avg_queued_load
-        FROM {self.dbname}.account_usage.warehouse_load_history wl
+        FROM {self.dbname}.warehouse_load_history wl
         WHERE DATE_TRUNC('DAY', wl.start_time) between'{start_date}' and '{end_date}'
         AND wl.warehouse_name = '{wh_name}'
         AND wl.avg_queued_load>'{n}'
@@ -120,7 +205,7 @@ class WarehouseProfile(SNFLKQuery):
         round((qh.list_external_files_time/1000),2) as list_external_files_time_sec,
         qh.query_tag,
         qh.execution_status
-        from {self.dbname}.account_usage.query_history qh 
+        from {self.dbname}.query_history qh 
         WHERE DATE_TRUNC('DAY', qh.start_time) between'{start_date}' and '{end_date}'
         AND qh.warehouse_name = '{wh_name}'
         order by hourly_start_time
@@ -167,25 +252,28 @@ class WarehouseProfile(SNFLKQuery):
         df=self.query_to_df(sql)
         return df
 
-# WH credits per houw
+# WH credits per hour
     
-    def wh_credits_per_hour(self,start_datetime="2022-10-01", end_datetime="2022-10-02",wh_name='PROD_WH'):
-        """
-        Displays credits consumed per hour by warehouse
-        """
-        if not end_datetime:
-            today_date = date.today()
-            end_datetime = str(today_date)
+    # def wh_credits_per_hour(self,start_datetime="2022-10-01", end_datetime="2022-10-02",wh_name='PROD_WH'):
+    #     """
+    #     Displays credits consumed per hour by warehouse
+    #     """
+    #     if not end_datetime:
+    #         today_date = date.today()
+    #         end_datetime = str(today_date)
 
-        sql=f"""
-            select *
-            from {self.dbname}.warehouse_metering_history
-            where date_trunc('second', start_time) between '{start_datetime}' and '{end_datetime}'
-        """
-        df=self.query_to_df(sql)
-        return df
+    #     sql=f"""
+    #         select *
+    #         from {self.dbname}.warehouse_metering_history
+    #         where date_trunc('second', start_time) between '{start_datetime}' and '{end_datetime}'
+    #     """
+    #     df=self.query_to_df(sql)
+    #     return df
 
     
+# WH efficiency
+
+        
 
 
 

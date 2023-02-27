@@ -266,14 +266,13 @@ class QueryProfile(SNFLKQuery):
         df=self.query_to_df(sql)
         return df
 
-    def queries_by_wh(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH'):
+    def queries_by_wh(self,start_datetime="2022-01-01", end_datetime="", warehouse_name='DEV_WH'):
         """
         Shows queries issued in specific warehouse in given time period.
-
         """
-        if not end_date:
-            today_date = date.today()
-            end_date = str(today_date)
+        # if not end_date:
+        #     today_date = date.today()
+        #     end_date = str(today_date)
         sql=f"""
         WITH WAREHOUSE_SIZE AS
         (
@@ -296,20 +295,37 @@ class QueryProfile(SNFLKQuery):
                     SELECT '4XLARGE' AS WAREHOUSE_SIZE, 128 AS NODES
                     )
         )
-        SELECT QUERY_ID,
-        EXECUTION_TIME,
-        START_TIME,
-        ROUND((EXECUTION_TIME/(1000*60*60))*WS.NODES,2) as CREDITS,
-        COMPILATION_TIME,
-        TOTAL_ELAPSED_TIME,
-        QUEUED_OVERLOAD_TIME,
-        QUEUED_PROVISIONING_TIME,
-        QUEUED_REPAIR_TIME
+        select qh.query_id,
+        qh.query_type,
+        qh.query_text,
+        qh.user_name,
+        qh.role_name,
+        qh.database_name,
+        qh.schema_name,
+        qh.warehouse_name,
+        qh.warehouse_size,
+        qh.warehouse_type,
+        qh.bytes_scanned,
+        round(qh.percentage_scanned_from_cache*100,2) as percentage_scanned_from_cache,
+        qh.bytes_spilled_to_local_storage,
+        qh.bytes_spilled_to_remote_storage,
+        qh.partitions_total,
+        qh.start_time,
+        qh.end_time,
+        qh.execution_status,
+        round((qh.total_elapsed_time/(1000)),2) as total_time_elapsed_sec,
+        round((qh.compilation_time/(1000)),2) as compilation_time_sec,
+        round((qh.execution_time/1000),2) as execution_time_sec,
+        round((qh.queued_provisioning_time/1000),2) as queued_provisioning_time_sec,
+        round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
+        round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
+        round((qh.list_external_files_time/1000),2) as list_external_files_time_sec,
+        ROUND((EXECUTION_TIME/(1000*60*60))*WS.NODES,2) as CREDITS
         FROM {self.dbname}.QUERY_HISTORY QH
         JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(QH.WAREHOUSE_SIZE)
-        where START_TIME between '{start_date}' and '{end_date}'
-        and warehouse_name='{wh_name}'
-        order by execution_time desc
+        where START_TIME between '{start_datetime}' and '{end_datetime}'
+        and warehouse_name='{warehouse_name}'
+        order by credits desc
         """
         df=self.query_to_df(sql)
         return df
@@ -323,319 +339,102 @@ class QueryProfile(SNFLKQuery):
         df = self.query_to_df(sql)
         return df
 
-    def get_queries(self, **kwargs):
-        sql=str()
-        defaultKwargs = { 
-                'start_date': '', 
-                'end_date': '', 
-                'user': None, 
-                'wh': None,
-                'es': None,
-                'n': 10
-             }
-        kwargs = { **defaultKwargs, **kwargs }
-        n = kwargs['n']
-        if kwargs['wh']!=None and kwargs['user']!=None and kwargs['es']!=None:
-            sql = f"""
-            select qh.query_id,
-            qh.query_type,
-            qh.query_text,
-            qh.user_name,
-            qh.role_name,
-            qh.database_name,
-            qh.schema_name,
-            qh.warehouse_name,
-            qh.warehouse_size,
-            qh.warehouse_type,
-            qh.bytes_scanned,
-            round(qh.percentage_scanned_from_cache*100,2) as percentage_scanned_from_cache,
-            qh.bytes_spilled_to_local_storage,
-            qh.bytes_spilled_to_remote_storage,
-            qh.partitions_total,
-            qh.start_time,
-            qh.end_time,
-            qh.query_tag,
-            qh.execution_status,
-            round((qh.total_elapsed_time/(1000)),2) as total_time_elapsed_sec,
-            round((qh.compilation_time/(1000)),2) as compilation_time_sec,
-            round((qh.execution_time/1000),2) as execution_time_sec,
-            round((qh.queued_provisioning_time/1000),2) as queued_provisioning_time_sec,
-            round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
-            round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
-            round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
-                from {self.dbname}.query_history qh
-                where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
-                and qh.warehouse_name='{kwargs['wh']}' and qh.user_name='{kwargs['user']}'
-                and qh.execution_status='{kwargs['es']}'
-                limit {n};
-            """
-        if kwargs['wh']!=None and kwargs['user']==None and kwargs['es']!=None:
-            sql = f"""
-            select qh.query_id,
-            qh.query_type,
-            qh.query_text,
-            qh.user_name,
-            qh.role_name,
-            qh.database_name,
-            qh.schema_name,
-            qh.warehouse_name,
-            qh.warehouse_size,
-            qh.warehouse_type,
-            qh.bytes_scanned,
-            round(qh.percentage_scanned_from_cache*100,2) as percentage_scanned_from_cache,
-            qh.bytes_spilled_to_local_storage,
-            qh.bytes_spilled_to_remote_storage,
-            qh.partitions_total,
-            qh.start_time,
-            qh.end_time,
-            qh.query_tag,
-            qh.execution_status,
-            round((qh.total_elapsed_time/(1000)),2) as total_time_elapsed_sec,
-            round((qh.compilation_time/(1000)),2) as compilation_time_sec,
-            round((qh.execution_time/1000),2) as execution_time_sec,
-            round((qh.queued_provisioning_time/1000),2) as queued_provisioning_time_sec,
-            round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
-            round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
-            round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
-            from {self.dbname}.query_history qh
-            where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
-            and qh.warehouse_name='{kwargs['wh']}' and qh.execution_status='{kwargs['es']}'
-            limit {n};
-            """
-        if kwargs['wh']!=None and kwargs['user']!=None and kwargs['es']==None:
-            sql = f"""
-            select qh.query_id,
-            qh.query_type,
-            qh.query_text,
-            qh.user_name,
-            qh.role_name,
-            qh.database_name,
-            qh.schema_name,
-            qh.warehouse_name,
-            qh.warehouse_size,
-            qh.warehouse_type,
-            qh.bytes_scanned,
-            round(qh.percentage_scanned_from_cache*100,2) as percentage_scanned_from_cache,
-            qh.bytes_spilled_to_local_storage,
-            qh.bytes_spilled_to_remote_storage,
-            qh.partitions_total,
-            qh.start_time,
-            qh.end_time,
-            qh.query_tag,
-            qh.execution_status,
-            round((qh.total_elapsed_time/(1000)),2) as total_time_elapsed_sec,
-            round((qh.compilation_time/(1000)),2) as compilation_time_sec,
-            round((qh.execution_time/1000),2) as execution_time_sec,
-            round((qh.queued_provisioning_time/1000),2) as queued_provisioning_time_sec,
-            round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
-            round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
-            round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
-                from {self.dbname}.query_history qh
-                where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
-                and qh.warehouse_name='{kwargs['wh']}' and qh.user_name='{kwargs['user']}'
-                limit {n};
-            """
-        if kwargs['wh']==None and kwargs['user']!=None and kwargs['es']!=None:
-            sql = f"""
-            select qh.query_id,
-            qh.query_type,
-            qh.query_text,
-            qh.user_name,
-            qh.role_name,
-            qh.database_name,
-            qh.schema_name,
-            qh.warehouse_name,
-            qh.warehouse_size,
-            qh.warehouse_type,
-            qh.bytes_scanned,
-            round(qh.percentage_scanned_from_cache*100,2) as percentage_scanned_from_cache,
-            qh.bytes_spilled_to_local_storage,
-            qh.bytes_spilled_to_remote_storage,
-            qh.partitions_total,
-            qh.start_time,
-            qh.end_time,
-            qh.query_tag,
-            qh.execution_status,
-            round((qh.total_elapsed_time/(1000)),2) as total_time_elapsed_sec,
-            round((qh.compilation_time/(1000)),2) as compilation_time_sec,
-            round((qh.execution_time/1000),2) as execution_time_sec,
-            round((qh.queued_provisioning_time/1000),2) as queued_provisioning_time_sec,
-            round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
-            round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
-            round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
-                from {self.dbname}.query_history qh
-                where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
-                and qh.execution_status='{kwargs['es']}' and qh.user_name='{kwargs['user']}'
-                limit {n};
-            """
-        if kwargs['wh']!=None and kwargs['user']==None and kwargs['es']!=None:
-              sql = f"""
-                select qh.query_id,
-            qh.query_type,
-            qh.query_text,
-            qh.user_name,
-            qh.role_name,
-            qh.database_name,
-            qh.schema_name,
-            qh.warehouse_name,
-            qh.warehouse_size,
-            qh.warehouse_type,
-            qh.bytes_scanned,
-            round(qh.percentage_scanned_from_cache*100,2) as percentage_scanned_from_cache,
-            qh.bytes_spilled_to_local_storage,
-            qh.bytes_spilled_to_remote_storage,
-            qh.partitions_total,
-            qh.start_time,
-            qh.end_time,
-            qh.query_tag,
-            qh.execution_status,
-            round((qh.total_elapsed_time/(1000)),2) as total_time_elapsed_sec,
-            round((qh.compilation_time/(1000)),2) as compilation_time_sec,
-            round((qh.execution_time/1000),2) as execution_time_sec,
-            round((qh.queued_provisioning_time/1000),2) as queued_provisioning_time_sec,
-            round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
-            round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
-            round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
-                from {self.dbname}.query_history qh
-                where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
-                and qh.execution_status='{kwargs['es']}' and qh.warehouse_name='{kwargs['wh']}'
-                limit {n};
-            """
-        if kwargs['wh']!=None and kwargs['user']==None and kwargs['es']==None:
-             sql = f"""
-                select qh.query_id,
-            qh.query_type,
-            qh.query_text,
-            qh.user_name,
-            qh.role_name,
-            qh.database_name,
-            qh.schema_name,
-            qh.warehouse_name,
-            qh.warehouse_size,
-            qh.warehouse_type,
-            qh.bytes_scanned,
-            round(qh.percentage_scanned_from_cache*100,2) as percentage_scanned_from_cache,
-            qh.bytes_spilled_to_local_storage,
-            qh.bytes_spilled_to_remote_storage,
-            qh.partitions_total,
-            qh.start_time,
-            qh.end_time,
-            qh.query_tag,
-            qh.execution_status,
-            round((qh.total_elapsed_time/(1000)),2) as total_time_elapsed_sec,
-            round((qh.compilation_time/(1000)),2) as compilation_time_sec,
-            round((qh.execution_time/1000),2) as execution_time_sec,
-            round((qh.queued_provisioning_time/1000),2) as queued_provisioning_time_sec,
-            round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
-            round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
-            round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
-                from {self.dbname}.query_history qh
-                where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
-                and qh.warehouse_name='{kwargs['wh']}'
-                limit {n};
-            """
-        if kwargs['wh']==None and kwargs['user']!=None and kwargs['es']==None:
-             sql = f"""
-                select qh.query_id,
-            qh.query_type,
-            qh.query_text,
-            qh.user_name,
-            qh.role_name,
-            qh.database_name,
-            qh.schema_name,
-            qh.warehouse_name,
-            qh.warehouse_size,
-            qh.warehouse_type,
-            qh.bytes_scanned,
-            round(qh.percentage_scanned_from_cache*100,2) as percentage_scanned_from_cache,
-            qh.bytes_spilled_to_local_storage,
-            qh.bytes_spilled_to_remote_storage,
-            qh.partitions_total,
-            qh.start_time,
-            qh.end_time,
-            qh.query_tag,
-            qh.execution_status,
-            round((qh.total_elapsed_time/(1000)),2) as total_time_elapsed_sec,
-            round((qh.compilation_time/(1000)),2) as compilation_time_sec,
-            round((qh.execution_time/1000),2) as execution_time_sec,
-            round((qh.queued_provisioning_time/1000),2) as queued_provisioning_time_sec,
-            round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
-            round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
-            round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
-                from {self.dbname}.query_history qh
-                where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
-                and qh.user_name='{kwargs['user']}'
-                limit {n};
-            """
-        if kwargs['wh']==None and kwargs['user']==None and kwargs['es']!=None:
-             sql = f"""
-                select qh.query_id,
-            qh.query_type,
-            qh.query_text,
-            qh.user_name,
-            qh.role_name,
-            qh.database_name,
-            qh.schema_name,
-            qh.warehouse_name,
-            qh.warehouse_size,
-            qh.warehouse_type,
-            qh.bytes_scanned,
-            round(qh.percentage_scanned_from_cache*100,2) as percentage_scanned_from_cache,
-            qh.bytes_spilled_to_local_storage,
-            qh.bytes_spilled_to_remote_storage,
-            qh.partitions_total,
-            qh.start_time,
-            qh.end_time,
-            qh.query_tag,
-            qh.execution_status,
-            round((qh.total_elapsed_time/(1000)),2) as total_time_elapsed_sec,
-            round((qh.compilation_time/(1000)),2) as compilation_time_sec,
-            round((qh.execution_time/1000),2) as execution_time_sec,
-            round((qh.queued_provisioning_time/1000),2) as queued_provisioning_time_sec,
-            round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
-            round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
-            round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
-                from {self.dbname}.query_history qh
-                where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
-                and qh.execution_status='{kwargs['es']}'
-                limit {n};
-            """
-        if kwargs['wh']==None and kwargs['user']==None and kwargs['es']==None:
-            sql = f"""
-                select qh.query_id,
-            qh.query_type,
-            qh.query_text,
-            qh.user_name,
-            qh.role_name,
-            qh.database_name,
-            qh.schema_name,
-            qh.warehouse_name,
-            qh.warehouse_size,
-            qh.warehouse_type,
-            qh.bytes_scanned,
-            round(qh.percentage_scanned_from_cache*100,2) as percentage_scanned_from_cache,
-            qh.bytes_spilled_to_local_storage,
-            qh.bytes_spilled_to_remote_storage,
-            qh.partitions_total,
-            qh.start_time,
-            qh.end_time,
-            qh.query_tag,
-            qh.execution_status,
-            round((qh.total_elapsed_time/(1000)),2) as total_time_elapsed_sec,
-            round((qh.compilation_time/(1000)),2) as compilation_time_sec,
-            round((qh.execution_time/1000),2) as execution_time_sec,
-            round((qh.queued_provisioning_time/1000),2) as queued_provisioning_time_sec,
-            round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
-            round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
-            round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
-                from {self.dbname}.query_history qh
-                where qh.start_time between '{kwargs['start_date']}' and '{kwargs['end_date']}'
-                limit {n};
-            """
+    # def get_queries_by_wh(self,\
+    #                 start_datetime=None,\
+    #                 end_datetime=None,\
+    #                 warehouse_name=None):
+    #     """Gets queries running at a particular time, by a specific user, 
+    #     in a specific warehouse """
+        
+    #     # start_datetime = start_datetime or "start_datetime"
+    #     # end_datetime = end_datetime or "end_datetime"
+    #     # user_name = user_name or "user_name"
+    #     # warehouse_name = warehouse_name or 'warehouse_name'
+
+    #     sql = f"""
+    #         select qh.query_id,
+    #         qh.query_type,
+    #         qh.query_text,
+    #         qh.user_name,
+    #         qh.role_name,
+    #         qh.database_name,
+    #         qh.schema_name,
+    #         qh.warehouse_name,
+    #         qh.warehouse_size,
+    #         qh.warehouse_type,
+    #         qh.bytes_scanned,
+    #         round(qh.percentage_scanned_from_cache*100,2) as percentage_scanned_from_cache,
+    #         qh.bytes_spilled_to_local_storage,
+    #         qh.bytes_spilled_to_remote_storage,
+    #         qh.partitions_total,
+    #         qh.start_time,
+    #         qh.end_time,
+    #         qh.query_tag,
+    #         qh.execution_status,
+    #         round((qh.total_elapsed_time/(1000)),2) as total_time_elapsed_sec,
+    #         round((qh.compilation_time/(1000)),2) as compilation_time_sec,
+    #         round((qh.execution_time/1000),2) as execution_time_sec,
+    #         round((qh.queued_provisioning_time/1000),2) as queued_provisioning_time_sec,
+    #         round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
+    #         round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
+    #         round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
+    #             from {self.dbname}.query_history qh
+    #             where qh.start_time between '{start_datetime}' and '{end_datetime}'
+    #             and qh.warehouse_name='{warehouse_name}'
+    #         """
+        
+    #     df = self.query_to_df(sql)
+    #     return df
 
 
-        df = self.query_to_df(sql)
-        return df
+    # def get_queries_by_wh_with_credits(self,\
+    #                 start_datetime=None,\
+    #                 end_datetime=None,\
+    #                 warehouse_name=None):
+    #     """Gets queries running at a particular time, by a specific user, 
+    #     in a specific warehouse """
+        
+    #     # start_datetime = start_datetime or "start_datetime"
+    #     # end_datetime = end_datetime or "end_datetime"
+    #     # user_name = user_name or "user_name"
+    #     # warehouse_name = warehouse_name or 'warehouse_name'
+
+    #     sql = f"""
+    #         select qh.query_id,
+    #         qh.query_type,
+    #         qh.query_text,
+    #         qh.user_name,
+    #         qh.role_name,
+    #         qh.database_name,
+    #         qh.schema_name,
+    #         qh.warehouse_name,
+    #         qh.warehouse_size,
+    #         qh.warehouse_type,
+    #         qh.bytes_scanned,
+    #         round(qh.percentage_scanned_from_cache*100,2) as percentage_scanned_from_cache,
+    #         qh.bytes_spilled_to_local_storage,
+    #         qh.bytes_spilled_to_remote_storage,
+    #         qh.partitions_total,
+    #         qh.start_time,
+    #         qh.end_time,
+    #         qh.query_tag,
+    #         qh.execution_status,
+    #         round((qh.total_elapsed_time/(1000)),2) as total_time_elapsed_sec,
+    #         round((qh.compilation_time/(1000)),2) as compilation_time_sec,
+    #         round((qh.execution_time/1000),2) as execution_time_sec,
+    #         round((qh.queued_provisioning_time/1000),2) as queued_provisioning_time_sec,
+    #         round((qh.queued_repair_time/1000),2) as queued_repair_time_sec,
+    #         round((qh.queued_overload_time/1000),2) as queued_overload_time_sec,
+    #         round((qh.list_external_files_time/1000),2) as list_external_files_time_sec
+    #             from {self.dbname}.query_history qh
+    #             where qh.start_time between '{start_datetime}' and '{end_datetime}'
+    #             and qh.warehouse_name='{warehouse_name}'
+    #         """
+        
+    #     df = self.query_to_df(sql)
+    #     return df
+    
+
 
     def n_inefficient_queries_v2(self, start_date='', end_date='', n=10, metric='credits', unique=False):        
         if not end_date:
