@@ -352,6 +352,71 @@ def plot_partner_tool_df(partner_tool_df):
     return df_by_pt, fig, ts_fig
 
 
+import textwrap as tw
+
+
+def generate_resource_monitor_sql(resource_monitor_name="monitor_1", \
+                                  credit_quota=10, \
+                                  periodicity="weekly", \
+                                  start_timestamp_ltz="2023-02-18 00:00:00 PST", \
+                                  percentage_of_monitor=100, \
+                                  action="notify", \
+                                  warehouse_name="warehouse_1"):
+    resource_monitor_sql = tw.dedent(f"""
+                            USE ROLE ACCOUNTADMIN;
+                            CREATE OR REPLACE RESOURCE MONITOR {resource_monitor_name} 
+                            WITH CREDIT_QUOTA={credit_quota}
+                            FREQUENCY={periodicity}
+                            START_TIMESTAMP={start_timestamp_ltz}
+                            TRIGGERS ON {percentage_of_monitor} PERCENT DO {action};
+                            ALTER WAREHOUSE {warehouse_name} SET RESOURCE_MONITOR={resource_monitor_name};
+                            """)
+    return resource_monitor_sql
+
+
+def get_resource_monitor_values(ts, te):
+    print("Ts te: ", ts, te)
+    df_compute = cqlib.cost_of_compute_ts(ts, te)
+    df_compute.drop(df_compute.loc[df_compute['warehouse_name'] == "CLOUD_SERVICES_ONLY"].index, inplace=True)
+    df_by_wh_day = df_compute.groupby([
+        pd.Grouper(key='hourly_start_time', axis=0, freq='D', sort=True),
+        pd.Grouper('warehouse_name')
+    ]).sum()
+    df_by_wh_day.reset_index(inplace=True)
+    df_by_wh_day.rename(columns={"hourly_start_time": "day"}, errors="raise", inplace=True)
+    df_stats_by_wh_day = df_by_wh_day.groupby("warehouse_name")["credits"].agg(['mean', 'std'])
+    df_stats_by_wh_day.reset_index(inplace=True)
+    df_stats_by_wh_day["credits_three_sigma_plus"] = df_stats_by_wh_day["mean"] + 3 * df_stats_by_wh_day["std"]
+    df_stats_by_wh_day["credits_three_sigma_minus"] = df_stats_by_wh_day["mean"] - 3 * df_stats_by_wh_day["std"]
+    df_stats_by_wh_day["credits_three_sigma_minus"] = df_stats_by_wh_day["credits_three_sigma_minus"].clip(0, None)
+    df_stats_by_wh_day = df_stats_by_wh_day.round(2)
+    df_stats_by_wh_day.drop(columns=["mean", "std"], inplace=True)
+    df_stats_by_wh_day.reset_index(inplace=True, drop=True)
+    return df_by_wh_day, df_stats_by_wh_day
+
+
+def resource_moniter_queries():
+    df_by_wh, resource_monitor = get_resource_monitor_values(st.session_state["training_start"],
+                                                             st.session_state['training_end'])
+    resource_monitor_queries = []
+    for idx, wh_name in enumerate(resource_monitor["warehouse_name"].unique()):
+        resource_monitor_name = resource_monitor.loc[idx]["warehouse_name"] + '_RESOURCE_MONITOR'
+        credit_quota = resource_monitor.loc[idx]["credits_three_sigma_plus"]
+        start_timestamp_ltz = "YYYY-MM-DD HH:MM:SS PST"
+        periodicity = "DAILY"
+        percentage_of_monitor = 100
+        action = "NOTIFY"
+        warehouse_name = resource_monitor.loc[idx]["warehouse_name"]
+        resource_monitor_queries.append(generate_resource_monitor_sql(resource_monitor_name, \
+                                                                      credit_quota, \
+                                                                      periodicity, \
+                                                                      start_timestamp_ltz, \
+                                                                      percentage_of_monitor, \
+                                                                      action, \
+                                                                      warehouse_name))
+    return resource_monitor_queries
+
+
 def show_dashboard(**kwargs):
     print("Under Dashboard")
     total_cost_df = kwargs.get('total_cost_df')
@@ -364,11 +429,11 @@ def show_dashboard(**kwargs):
     total_usage = df_by_usage_category.round({"credits_previous_week": 2, "dollars_previous_week": 2, })
 
     row1_cols = st.columns([1, 1])
-    row1_cols[0].write('Credit and dollar usage by category (Previous Week)')
-    row1_cols[0].dataframe(total_usage[["category_name", "credits_previous_week", "dollars_previous_week"]],
-                           use_container_width=True)
-    row1_cols[1].write('Credit and dollar usage by category (Current Week)')
-    row1_cols[1].dataframe(total_usage[['category_name', 'credits', 'dollars']], use_container_width=True)
+    # row1_cols[0].write('Credit and dollar usage by category (Previous Week)')
+    # row1_cols[0].dataframe(total_usage[["category_name", "credits_previous_week", "dollars_previous_week"]],
+    #                        use_container_width=True)
+    # row1_cols[1].write('Credit and dollar usage by category (Current Week)')
+    # row1_cols[1].dataframe(total_usage[['category_name', 'credits', 'dollars']], use_container_width=True)
     metric_cols = st.columns([2, 3])
     metric_cols[0].success(""" Comparison of metric from previous month.""")
     metric1, metric2, metric3, metric4, metric5 = st.columns(5)
@@ -384,8 +449,11 @@ def show_dashboard(**kwargs):
     metric4.metric("Storage", f"{card_values['Storage'][0]}", f"{card_values['Storage'][1]}")
     metric4.metric("Replication", f"{card_values['Replication'][0]}", f"{card_values['Replication'][1]}")
     metric5.metric("Total", f"{card_values['Total'][0]}", f"{card_values['Total'][1]}")
+    total_cost_cols = st.columns([2, 3])
+    total_cost_cols[0].success("Pie Chart representing the total credit and dollar usage")
     st.plotly_chart(fig, use_container_width=True)
-    st.success("Total Cost in timeseries.")
+    total_cost_ts = st.columns([2,3])
+    total_cost_ts[0].success("Total Cost in timeseries.")
     st.plotly_chart(ts_fig, use_container_width=True)
     st.warning("👉 Resource usage by :: User.")
     st.write("")
@@ -396,19 +464,20 @@ def show_dashboard(**kwargs):
     user_cols[0].dataframe(df_by_user, use_container_width=True)
     user_cols[1].write("List of low usage users (<1% of credits) with usage (Current month)")
     user_cols[1].dataframe(df_low_usage_users, use_container_width=True)
-    st.subheader("Plot for total cost by user")
+    user_pie_cols = st.columns([2,3])
+    user_pie_cols[0].success("Plot for total cost by user")
     st.plotly_chart(user_fig, use_container_width=True)
     st.subheader("Timeseries plot for cost by user")
     st.plotly_chart(ts_fig, use_container_width=True)
 
     st.warning("👉 Resource usage by :: Warehouse.")
     df_by_wh_print, fig, ts_fig = plot_warehouse_df(cost_by_wh_df)
-    wh_cols = st.columns([1, 1])
+    wh_cols = st.columns([1.5, 1])
 
     wh_cols[0].write("")
-    wh_cols[0].write("")
-    wh_cols[0].write("")
     wh_cols[0].subheader("Total cost by warehouse")
+    wh_cols[0].write("")
+    wh_cols[0].write("")
     wh_cols[0].dataframe(df_by_wh_print, use_container_width=True)
     wh_cols[1].plotly_chart(fig, use_container_width=True)
     st.subheader("Timeseries plot for cost by Warehouse")
@@ -425,3 +494,13 @@ def show_dashboard(**kwargs):
     partner_cols[1].plotly_chart(fig, use_container_width=True)
     st.subheader("Timeseries plot for cost by Partner Tools")
     st.plotly_chart(ts_fig, use_container_width=True)
+    resource_monitor_queries = resource_moniter_queries()
+    print(resource_monitor_queries)
+    st.warning("👉 Resource Monitor Queries")
+    for query in resource_monitor_queries:
+        st.write(f"🎫  {query}")
+        st.write("---")
+    # queries_cols = st.columns(len(resource_monitor_queries))
+    # for i in range(len(queries_cols)):
+    #     with queries_cols[i].expander(f"Query {i + 1}"):
+    #         st.write(resource_monitor_queries[i])
