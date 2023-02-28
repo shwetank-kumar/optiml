@@ -1,0 +1,3 @@
+*.pyc
+notebooks/kiva/.ipynb_checkpoints/cost_analysis_practice-checkpoint.ipynb
+*.xml
