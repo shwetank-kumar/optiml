@@ -120,8 +120,7 @@ def plot_user_df(user_df):
     df_by_user = df_by_user.round(2)
 
     ## Get usage for previous week as a predictive sanity check
-    p1_sdate, p1_edate = get_previous_dates(st.session_state.sdate, st.session_state.edate, 1)
-    df_prev = cqlib.cost_by_user_ts(p1_sdate, p1_edate)
+    df_prev = cqlib.cost_by_user_ts(st.session_state.p1_sdate, st.session_state.p1_edate)
     df_by_user_prev = df_prev.groupby(['user_name']).sum('numeric_only').reset_index()
     df_by_user_prev = df_by_user_prev.round(2)
     df_by_user_prev.rename(columns={"approximate_credits": "approximate_credits_previous_week"}, inplace=True)
@@ -143,6 +142,8 @@ def plot_user_df(user_df):
     df_by_user["pct_change_credits"] = round((df_by_user["approximate_credits"] \
                                               - df_by_user["approximate_credits_previous_week"]) \
                                              / df_by_user["approximate_credits_previous_week"] * 100, 2)
+    df_by_user_copy = deepcopy(df_by_user)
+    ## Group low usage users together
     df_by_user = df_by_user[["user_name", "approximate_credits"]]
     df_by_user["percent_usage"] = df_by_user["approximate_credits"] / \
                                   df_by_user[df_by_user["user_name"] == "Total"]["approximate_credits"].values[0] * 100
@@ -150,6 +151,10 @@ def plot_user_df(user_df):
     idx_low_usage_users = df_by_user.loc[df_by_user["percent_usage"] < 1.00].sum(axis=0, numeric_only=True)
     df_low_usage_users = df_by_user.loc[df_by_user["percent_usage"] < 1.00].reset_index(drop=True)
 
+    ## Drop total
+    df_by_user.drop(df_by_user.tail(1).index, inplace=True)
+
+    ## Plot pie
     ## Group low usage users together
     df_by_user = df_by_user.loc[df_by_user["percent_usage"] > 1.00].reset_index(drop=True)
     df_by_user.loc[len(df_by_user) - 1.5] = ["Low_usage_users", \
@@ -168,8 +173,7 @@ def plot_user_df(user_df):
     )
 
     fig.add_trace(go.Pie(labels=df_by_user['user_name'].tolist(), \
-                         values=df_by_user['approximate_credits'].tolist(), \
-                         name="Credits", rotation=320, \
+                         values=df_by_user['approximate_credits'].tolist(), name="Credits", rotation=320,
                          marker_colors=color_scheme), row=1, col=1)
 
     fig.update_layout(
@@ -199,8 +203,7 @@ def plot_user_df(user_df):
         xaxis_title="Hourly start time (UTC)",
         yaxis_title="Credits used (approx.)"
     )
-    print("Hello")
-    return df_by_user, df_low_usage_users, fig, ts_fig
+    return df_by_user_copy, df_low_usage_users, fig, ts_fig
 
 
 # Warehouse Usage
@@ -452,21 +455,23 @@ def show_dashboard(**kwargs):
     total_cost_cols = st.columns([2, 3])
     total_cost_cols[0].success("Pie Chart representing the total credit and dollar usage")
     st.plotly_chart(fig, use_container_width=True)
-    total_cost_ts = st.columns([2,3])
+    total_cost_ts = st.columns([2, 3])
     total_cost_ts[0].success("Total Cost in timeseries.")
     st.plotly_chart(ts_fig, use_container_width=True)
     st.warning("👉 Resource usage by :: User.")
     st.write("")
     # st.subheader("Credit and dollar usage by user with low usage users consolidated (Current month)")
     df_by_user, df_low_usage_users, user_fig, ts_fig = plot_user_df(cost_by_user_df)
-    user_cols = st.columns([1, 1])
-    user_cols[0].write('Users: Credit consumption trends')
-    user_cols[0].dataframe(df_by_user, use_container_width=True)
-    user_cols[1].write("List of low usage users (<1% of credits) with usage (Current month)")
-    user_cols[1].dataframe(df_low_usage_users, use_container_width=True)
-    user_pie_cols = st.columns([2,3])
-    user_pie_cols[0].success("Plot for total cost by user")
-    st.plotly_chart(user_fig, use_container_width=True)
+    st.success('Users: Credit consumption trends')
+    st.dataframe(df_by_user, use_container_width=True)
+    user_cols = st.columns([1, 1.5])
+    user_cols[0].success("List of low usage users (<1% of credits) with usage (Current month)")
+    user_cols[0].dataframe(df_low_usage_users, use_container_width=True)
+    user_cols[1].success("Plot for total cost by user")
+    user_cols[1].plotly_chart(user_fig, use_container_width=True)
+    # user_pie_cols = st.columns([2, 3])
+    # user_pie_cols[0].success("Plot for total cost by user")
+    # st.plotly_chart(user_fig, use_container_width=True)
     st.subheader("Timeseries plot for cost by user")
     st.plotly_chart(ts_fig, use_container_width=True)
 
@@ -497,10 +502,10 @@ def show_dashboard(**kwargs):
     resource_monitor_queries = resource_moniter_queries()
     print(resource_monitor_queries)
     st.warning("👉 Resource Monitor Queries")
-    for query in resource_monitor_queries:
-        st.write(f"🎫  {query}")
-        st.write("---")
-    # queries_cols = st.columns(len(resource_monitor_queries))
-    # for i in range(len(queries_cols)):
-    #     with queries_cols[i].expander(f"Query {i + 1}"):
-    #         st.write(resource_monitor_queries[i])
+    # for query in resource_monitor_queries:
+        # st.write(f"🎫  {query}")
+        # st.write("---")
+    queries_cols = st.columns(len(resource_monitor_queries))
+    for i in range(len(queries_cols)):
+        with queries_cols[i].expander(f"🎫 Query {i + 1}"):
+            st.write(resource_monitor_queries[i])
