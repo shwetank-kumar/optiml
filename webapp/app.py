@@ -96,6 +96,6 @@ with st.sidebar:
 if selected == 'Home':
     myhome = Homepage()
     myhome.home_page()
-elif (selected == 'Resource Usage') and (st.session_state.loggen_in == True):
+elif (selected == 'Resource Usage') and (st.session_state.logged_in == True):
     print("Resource Usage Selected")
     show_dashboard(**st.session_state)
