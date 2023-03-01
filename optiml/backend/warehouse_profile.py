@@ -10,7 +10,7 @@ class WarehouseProfile(SNFLKQuery):
         df = self.query_to_df(sql)
         return df
 
-    def wh_queued_load_ts(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH',delta='minute'):
+    def wh_load_and_efficiency(self,start_date="2022-01-01", end_date="",delta='hour'):
         """"
         Displays avg_running_load, avg_queued_load,hourly_start_time for given warehouse in a given time period from warehouse load history table.
         Displays count of queries, average execution time, average provisioning time, average compilation time, average queued overload time
@@ -24,24 +24,26 @@ class WarehouseProfile(SNFLKQuery):
         sql = f"""
         WITH wlh as (
         SELECT DATE_TRUNC('{delta}', wl.start_time) hourly_start_time,
+        warehouse_name,
         AVG(avg_running) avg_running_load, 
         AVG(avg_queued_load) avg_queued_load
         FROM {self.dbname}.warehouse_load_history wl
-        WHERE DATE_TRUNC('DAY', wl.start_time) between'{start_date}' and '{end_date}'
-        AND wl.warehouse_name = '{wh_name}'
-        GROUP BY  hourly_start_time
+        WHERE DATE_TRUNC('{delta}', wl.start_time) between'{start_date}' and '{end_date}'
+        GROUP BY  hourly_start_time, warehouse_name
         ORDER BY hourly_start_time asc
         ),
         wmh AS (
             SELECT DATE_TRUNC('{delta}', wm.start_time) hourly_start_time, 
+            warehouse_name,
             round(avg(credits_used),2) as avg_credits
            FROM {self.dbname}.warehouse_metering_history wm
-          WHERE DATE_TRUNC('DAY', wm.start_time) between '{start_date}' and '{end_date}'
-            AND wm.warehouse_name = '{wh_name}'
-            ORDER BY hourly_start_time ASC
+          WHERE DATE_TRUNC('{delta}', wm.start_time) between '{start_date}' and '{end_date}'
+            GROUP BY  hourly_start_time, warehouse_name
+            ORDER BY hourly_start_time asc
         ),
         qh as (
         SELECT DATE_TRUNC('{delta}', qh.start_time) hourly_start_time, 
+        warehouse_name,
         COUNT(*) query_count,
         AVG(compilation_time) avg_compilation_time,
         AVG(execution_time) avg_execution_time,
@@ -49,16 +51,16 @@ class WarehouseProfile(SNFLKQuery):
         AVG(queued_repair_time) avg_queued_repair_time,
         AVG(queued_overload_time) avg_queued_overload_time
         FROM {self.dbname}.query_history qh
-        WHERE DATE_TRUNC('DAY', qh.start_time) between '{start_date}' and '{end_date}'
-        AND qh.warehouse_name = '{wh_name}'
-        GROUP BY  hourly_start_time
+        WHERE DATE_TRUNC('{delta}', qh.start_time) between '{start_date}' and '{end_date}'
+        GROUP BY  hourly_start_time, warehouse_name
         ORDER BY  hourly_start_time
         )
         SELECT wlh.hourly_start_time, 
+        wlh.warehouse_name,
         wlh.avg_running_load, 
         wlh.avg_queued_load,
         wmh.avg_credits,
-        round(wlh.avg_running_load / wmh.avg_credits * 100,2) as avg_efficiency, 
+        round(wlh.avg_running_load / (wmh.avg_credits + 0.001) * 100,2) as avg_efficiency, 
         qh.query_count,
         qh.avg_compilation_time,
         qh.avg_execution_time,
@@ -66,9 +68,73 @@ class WarehouseProfile(SNFLKQuery):
         FROM wlh, wmh, qh
         WHERE wlh.hourly_start_time = wmh.hourly_start_time
         AND qh.hourly_start_time = wmh.hourly_start_time
+        AND wlh.warehouse_name = wmh.warehouse_name
+        AND qh.warehouse_name = wmh.warehouse_name
         """
         df=self.query_to_df(sql)
         return df
+
+
+    # def wh_queued_load_ts(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH',delta='minute'):
+    #     """"
+    #     Displays avg_running_load, avg_queued_load,hourly_start_time for given warehouse in a given time period from warehouse load history table.
+    #     Displays count of queries, average execution time, average provisioning time, average compilation time, average queued overload time
+    #     for queries running in a given time period for given warehouse from query history table.
+    #     Displays credits used by given warehouse in tim period from warehouse metering table.
+    #     """
+    #     if not end_date:
+    #         today_date = date.today()
+    #         end_date = str(today_date)
+
+    #     sql = f"""
+    #     WITH wlh as (
+    #     SELECT DATE_TRUNC('{delta}', wl.start_time) hourly_start_time,
+    #     AVG(avg_running) avg_running_load, 
+    #     AVG(avg_queued_load) avg_queued_load
+    #     FROM {self.dbname}.warehouse_load_history wl
+    #     WHERE DATE_TRUNC('DAY', wl.start_time) between'{start_date}' and '{end_date}'
+    #     AND wl.warehouse_name = '{wh_name}'
+    #     GROUP BY  hourly_start_time
+    #     ORDER BY hourly_start_time asc
+    #     ),
+    #     wmh AS (
+    #         SELECT DATE_TRUNC('{delta}', wm.start_time) hourly_start_time, 
+    #         round(avg(credits_used),2) as avg_credits
+    #        FROM {self.dbname}.warehouse_metering_history wm
+    #       WHERE DATE_TRUNC('DAY', wm.start_time) between '{start_date}' and '{end_date}'
+    #         AND wm.warehouse_name = '{wh_name}'
+    #         GROUP BY  hourly_start_time
+    #         ORDER BY hourly_start_time asc
+    #     ),
+    #     qh as (
+    #     SELECT DATE_TRUNC('{delta}', qh.start_time) hourly_start_time, 
+    #     COUNT(*) query_count,
+    #     AVG(compilation_time) avg_compilation_time,
+    #     AVG(execution_time) avg_execution_time,
+    #     AVG(queued_provisioning_time) avg_queued_provisioning_time,
+    #     AVG(queued_repair_time) avg_queued_repair_time,
+    #     AVG(queued_overload_time) avg_queued_overload_time
+    #     FROM {self.dbname}.query_history qh
+    #     WHERE DATE_TRUNC('DAY', qh.start_time) between '{start_date}' and '{end_date}'
+    #     AND qh.warehouse_name = '{wh_name}'
+    #     GROUP BY  hourly_start_time
+    #     ORDER BY  hourly_start_time
+    #     )
+    #     SELECT wlh.hourly_start_time, 
+    #     wlh.avg_running_load, 
+    #     wlh.avg_queued_load,
+    #     wmh.avg_credits,
+    #     round(wlh.avg_running_load / (wmh.avg_credits + 0.001) * 100,2) as avg_efficiency, 
+    #     qh.query_count,
+    #     qh.avg_compilation_time,
+    #     qh.avg_execution_time,
+    #     qh.avg_queued_overload_time
+    #     FROM wlh, wmh, qh
+    #     WHERE wlh.hourly_start_time = wmh.hourly_start_time
+    #     AND qh.hourly_start_time = wmh.hourly_start_time
+    #     """
+    #     df=self.query_to_df(sql)
+    #     return df
 
     # def wh_queued_load_ts(self,start_date="2022-01-01", end_date="",wh_name='DEV_WH',delta='minute'):
     #     """"
