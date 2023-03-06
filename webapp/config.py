@@ -1,6 +1,10 @@
 import streamlit as st
 import datetime
 from datetime import timedelta
+import streamlit_authenticator as stauth
+import yaml
+from yaml import SafeLoader
+
 from optiml.backend.cost_profile import get_previous_dates
 
 params = dict(
@@ -26,7 +30,7 @@ def authenticate_user(username, password):
         data = fp.read()
     saved_user = data.split()[0].lower()
     saved_password = data.split()[1]
-    print("saved: ",saved_password,saved_password)
+    print("saved: ", saved_password, saved_password)
     if saved_user == username.lower() and saved_password == password:
         return True
     return False
@@ -34,3 +38,21 @@ def authenticate_user(username, password):
 
 def change_state(key, value):
     st.session_state[key] = value
+
+
+names = ["Peter Parker", "Rebecca Miller"]
+usernames = ["admin"]
+passwords = ['admin']
+with open('config.yaml') as file:
+    config = yaml.load(file, Loader=SafeLoader)
+#
+# authenticator = stauth.Authenticate(
+#     config['credentials'],
+#     config['cookie']['name'],
+#     config['cookie']['key'],
+#     config['cookie']['expiry_days'],
+#     config['preauthorized']
+# )
+
+authenticator = stauth.Authenticate(names, usernames, passwords,
+                                    "dashboard", "abcdef", cookie_expiry_days=30)

@@ -2,7 +2,7 @@ import pathlib, sys
 
 dir_path = str(pathlib.Path.cwd().parent)
 sys.path.append(dir_path)
-from config import set_params, authenticate_user, change_state
+from config import set_params, authenticate_user, change_state, authenticator
 
 set_params()
 import pandas as pd
@@ -20,14 +20,8 @@ cqlib = CostProfile(connection, st.session_state.Schema)
 st.set_page_config(
     page_title="Snowflake",
     page_icon="〰️",
-    layout="wide",
-    initial_sidebar_state="collapsed"
+    layout="wide"
 )
-
-if 'logged_in' not in st.session_state:
-    st.session_state['logged_in'] = False
-
-session_argument = {}
 
 if 'total_cost_df' not in st.session_state:
     print("dates:  ", st.session_state.sdate, st.session_state.edate)
@@ -49,40 +43,25 @@ if 'cost_by_partner_tools_df' not in st.session_state:
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
 
-
-def signin_form():
-    with st.form(key='login'):
-        st.markdown("### Login with your details ")
-        user_name = st.text_input(label="Enter Email", placeholder="Enter your user name")
-        password = st.text_input(label="Enter password", placeholder="Enter password", type="password")
-        if st.form_submit_button("Sign In 🔑"):
-            if authenticate_user(user_name, password):
-                st.session_state['logged_in'] = True
-            print(user_name, password, st.session_state['logged_in'])
-
-
-# with st.sidebar:
-#     st.header("Hello Admin. Welcome to OPTIM")
-#     signin_form()
-#     if 'logged_in' in st.session_state and st.session_state.logged_in == True:
-#         selected = option_menu(
-#             menu_title=None,
-#             options=['Home', 'Resource Usage', 'Query Profile', 'WH Profile', 'Storage Profile', 'User Profile',
-#                      'About Us'],
-#             icons=['house', 'file-bar-graph-fill', 'file-bar-graph-fill', 'file-bar-graph-fill', 'file-bar-graph-fill',
-#                    'file-bar-graph-fill', 'droplet-fill', 'gear']
-#             , menu_icon="cast")
-#     else:
-#         selected = "Home"
+# --- USER AUTHENTICATION ---
 
 
 with st.sidebar:
-    if not st.session_state['logged_in']:
-        st.header("Welcome to OPTIM. \nLogin to continue")
-        signin_form()
-        selected = "Home"
-    elif st.session_state['logged_in']:
-        st.title("Hey Admin\nChoose options below to navigate.")
+    name, authentication_status, username = authenticator.login("Login", "sidebar")
+    print(name, authentication_status, username)
+
+    if authentication_status == False:
+        st.error("Username/password is incorrect")
+        selected = 'Home'
+    #
+    if authentication_status == None:
+        st.warning("Please enter your username and password")
+        selected = 'Home'
+
+    if authentication_status:
+        # ---- READ EXCEL ----
+        print("Authenticated-----------------")
+        st.title(f"Hey {name.title()}\nChoose options below to navigate.")
         # st.title("Choose options below to navigate.")
         selected = option_menu(
             menu_title=None,
@@ -91,11 +70,11 @@ with st.sidebar:
             icons=['house', 'file-bar-graph-fill', 'file-bar-graph-fill', 'file-bar-graph-fill', 'file-bar-graph-fill',
                    'file-bar-graph-fill', 'droplet-fill', 'gear']
             , menu_icon="cast")
-        st.button(label="Logout", on_click=change_state, args=('logged_in', False))
+        authenticator.logout("Logout", "sidebar")
 
 if selected == 'Home':
     myhome = Homepage()
     myhome.home_page()
-elif (selected == 'Resource Usage') and (st.session_state.logged_in == True):
+elif selected == 'Resource Usage':
     print("Resource Usage Selected")
     show_dashboard(**st.session_state)
