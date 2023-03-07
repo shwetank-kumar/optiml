@@ -6,6 +6,7 @@ from tabulate import tabulate
 import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from optiml.backend.query_profile import QueryProfile
 from PIL import Image
 
 # system import
@@ -13,11 +14,11 @@ from optiml.backend.cost_profile import CostProfile, get_previous_dates
 from optiml.connection import SnowflakeConnConfig
 
 color_scheme = ["red", "blue", "green", "orange", "purple", "brown", "pink", "gray", "olive", "cyan", "darkviolet",
-                "goldenrod",
-                "darkgreen", "chocolate", "lawngreen"]
+                "goldenrod", "darkgreen", "chocolate", "lawngreen"]
 
 connection = SnowflakeConnConfig(accountname='jg84276.us-central1.gcp', warehousename="XSMALL_WH").create_connection()
 cqlib = CostProfile(connection, st.session_state['Schema'])
+qqlib = QueryProfile(connection, st.session_state['Schema'])
 
 
 def format_card_data(df):
@@ -377,6 +378,68 @@ def generate_resource_monitor_sql(resource_monitor_name="monitor_1", \
     return resource_monitor_sql
 
 
+def total_query_fails(df):
+    df_by_day = df.groupby(['day']).agg(
+        {'n_success': 'sum', 'n_fail': 'sum', 'credits_success': 'sum', 'credits_fail': 'sum'}).reset_index()
+    trace1 = go.Bar(
+        x=df_by_day['day'],
+        y=df_by_day['n_fail'],
+        name="Execution fail count",
+    )
+
+    trace2 = go.Scatter(
+        mode='lines+markers',
+        x=df_by_day['day'],
+        y=df_by_day['credits_fail'],
+        name="Credits",
+        yaxis='y2',
+    )
+
+    data = [trace1, trace2]
+
+    layout = go.Layout(
+        title_text='Query fails and credits per day',
+        yaxis=dict(
+            title="Count number",
+            showgrid=False,
+        ),
+        yaxis2=dict(
+            title="Credits",
+            overlaying="y",
+            side="right",
+            showgrid=False,
+        ),
+        xaxis=dict(
+            title="Date (UTC)"
+        ),
+        legend=dict(
+            yanchor="top",
+            y=0.99,
+            xanchor="left",
+            x=0.99
+        ),
+        barmode="stack"
+    )
+    fig = go.Figure(data=data, layout=layout)
+    metrics = {}
+    metrics["total_success"] = total_success = sum(df['n_success'])
+    metrics["total_fail"] = total_fail = sum(df['n_fail'])
+    metrics["pct_fail"] = round(total_fail / (total_fail + total_success) * 100, 2)
+    metrics["credits_success"] = credits_success = round(sum(df['credits_success']), 2)
+    metrics["credits_fail"] = credits_fail = sum(df['credits_fail'])
+    metrics["pct_credits_fail"] = round(credits_fail / (credits_fail + credits_success) * 100, 2)
+    return df_by_day, fig, metrics
+
+
+def warehouse_by_day(df):
+    df_by_wh = df.groupby(["warehouse_name", "day"]).agg(
+        {'n_success': 'sum', 'n_fail': 'sum', 'credits_success': 'sum', 'credits_fail': 'sum'}).reset_index()
+    failed_by_wh_fig = px.bar(df_by_wh, x="day", y="n_fail", color="warehouse_name", title="Number failed by warehouse")
+    credit_failed_fig = px.bar(df_by_wh, x="day", y="credits_fail", color="warehouse_name",
+                               title="Credits failed by warehouse")
+    return failed_by_wh_fig, credit_failed_fig
+
+
 def get_resource_monitor_values(ts, te):
     print("Ts te: ", ts, te)
     df_compute = cqlib.cost_of_compute_ts(ts, te)
@@ -500,3 +563,31 @@ def show_dashboard(**kwargs):
     for query in resource_monitor_queries:
         with st.expander(f"🎫 {query.split('=')[-1]}".strip(";")):
             st.write(query)
+
+
+def query_dashboard(**kwargs):
+    st.header("Snowflake Query Profile Dashboard 🎆")
+    df_by_day, fig, metrics = total_query_fails(kwargs['query_execution_status'])
+    total_data_cols = st.columns([1, 1])
+    total_data_cols[0].write("")
+    total_data_cols[0].success("Dataframe Showing Query Profiling")
+    total_data_cols[0].dataframe(df_by_day, use_container_width=True)
+    total_data_cols[1].plotly_chart(fig, use_container_width=True)
+    st.success("Summary Stats :: Credits and counts")
+    total_metric_cols = st.columns(3)
+    total_metric_cols[0].metric("Total Success", f"{metrics['total_success']}")
+    total_metric_cols[0].metric("Total Fail", f"{metrics['total_fail']}")
+    total_metric_cols[1].metric("Percentage Fail", f"{metrics['pct_fail']}%")
+    total_metric_cols[1].metric("Credits Success", f"{metrics['credits_success']}")
+    total_metric_cols[2].metric("Credits Fail", f"{metrics['credits_fail']}")
+    total_metric_cols[2].metric("percent credits_fail", f"{metrics['pct_credits_fail']}%")
+    failed_by_wh_fig, credit_failed_fig = warehouse_by_day(kwargs['query_execution_status'])
+    st.warning("👉 By warehouse by day.")
+    warehouse_cols = st.columns([1, 1])
+    warehouse_cols[0].plotly_chart(failed_by_wh_fig, use_container_width=True)
+    warehouse_cols[1].plotly_chart(credit_failed_fig, use_container_width=True)
+
+    df_expensive_queries_failed = qqlib.queries_by_execution_status(st.session_state.sdate, st.session_state.edate,
+                                                                    'FAIL')
+    df_unique_fail = qqlib.get_unique_failed_queries_with_metrics_ordered(df_expensive_queries_failed, 'credits')
+    df_unique_fail.reset_index(inplace=True)

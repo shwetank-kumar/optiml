@@ -7,20 +7,23 @@ from config import set_params, authenticate_user, change_state, authenticator
 set_params()
 import pandas as pd
 from homepage import Homepage
-from dashboard import show_dashboard
+from dashboard import show_dashboard, query_dashboard
 import streamlit as st
 import os
 from streamlit_option_menu import option_menu
+from optiml.backend.query_profile import QueryProfile
 from optiml.backend.cost_profile import CostProfile, get_previous_dates
 from optiml.connection import SnowflakeConnConfig
 
 connection = SnowflakeConnConfig(accountname='jg84276.us-central1.gcp', warehousename="XSMALL_WH").create_connection()
 cqlib = CostProfile(connection, st.session_state.Schema)
-
+qqlib = QueryProfile(connection, st.session_state.Schema)
+# df.head()
 st.set_page_config(
     page_title="Snowflake",
     page_icon="〰️",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
 if 'total_cost_df' not in st.session_state:
@@ -42,6 +45,12 @@ if 'cost_by_partner_tools_df' not in st.session_state:
                                                                               st.session_state.edate)
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
+
+if "query_execution_status" not in st.session_state:
+    st.session_state.query_execution_status = qqlib.queries_stats_by_execution_status(st.session_state.sdate,
+                                                                                      st.session_state.edate)
+
+# df.head()
 
 # --- USER AUTHENTICATION ---
 
@@ -78,3 +87,8 @@ if selected == 'Home':
 elif selected == 'Resource Usage':
     print("Resource Usage Selected")
     show_dashboard(**st.session_state)
+elif selected == "Query Profile":
+    query_dashboard(**st.session_state)
+
+# python 3.9.15
+# pandas 1.5.2
