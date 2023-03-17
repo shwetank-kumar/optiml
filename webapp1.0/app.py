@@ -17,20 +17,16 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-
 authenticator = sauth.Authenticate(names, usernames, passwords, "optiml", "optimlabccd", cookie_expiry_days=30)
 if 'connection' not in st.session_state:
     setup_snowflake()
     print(f"Snowflake connection done")
-set_params()
-load_data()
-
-
 
 with st.sidebar:
     name, authentication_status, username = authenticator.login("Login", "sidebar")
     print(name, authentication_status, username)
 
+    # st.write(f"logged in schema {st.session_state.Schema}")
     if authentication_status == False:
         st.error("Username/password is incorrect")
         selected = 'Home'
@@ -45,9 +41,9 @@ with st.sidebar:
         st.session_state['username'] = username
 
         print(f"User {username} Authenticated")
+        set_params(param=user_details[username], update=True)
 
-        # Update the params
-        set_params(True, user_details[username])
+
 
         st.title(f"Hey {name.title()}\nChoose options below to navigate.")
         # st.title("Choose options below to navigate.")
@@ -60,6 +56,9 @@ with st.sidebar:
             , menu_icon="cast")
 
         authenticator.logout("Logout", "sidebar")
+
+if authentication_status:
+    load_data(username=username)
 
 if selected == 'Home':
     myhome = Homepage()
