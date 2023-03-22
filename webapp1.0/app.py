@@ -3,13 +3,12 @@ import sys, pathlib
 dir_path = str(pathlib.Path.cwd().parent)
 sys.path.append(dir_path)
 import streamlit as st
-import streamlit_authenticator as sauth
 from streamlit_option_menu import option_menu
 from config import *
 from utils import load_data, setup_snowflake, set_params
 from homepage import Homepage
 from dashboard import show_dashboard, query_dashboard
-
+import streamlit_authenticator as sauth
 st.set_page_config(
     page_title="OptiML",
     page_icon="〰️",
@@ -42,8 +41,6 @@ with st.sidebar:
 
         print(f"User {username} Authenticated")
         set_params(param=user_details[username], update=True)
-
-
 
         st.title(f"Hey {name.title()}\nChoose options below to navigate.")
         # st.title("Choose options below to navigate.")
