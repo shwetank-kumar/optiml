@@ -1,10 +1,12 @@
 import streamlit as st
 import datetime
-from config import user_details,params
+
+from config import *
 from datetime import timedelta
 from optiml.backend.cost_profile import CostProfile, get_previous_dates
 from optiml.backend.query_profile import QueryProfile
 from optiml.connection import SnowflakeConnConfig
+
 
 
 # @st.cache
