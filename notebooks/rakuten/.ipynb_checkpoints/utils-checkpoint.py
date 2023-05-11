@@ -12,17 +12,19 @@ logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s', level=loggin
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARN)
 
-# def snowconn():
-conn = snowflake.connector.connect(
-    user=os.environ['SNOWFLAKE_USER'],
-    role=os.environ['SNOWFLAKE_ROLE'],
-    password=os.environ['SNOWFLAKE_PASSWORD'],
-    account=os.environ['SNOWFLAKE_ACCOUNT'],
-    warehouse=os.environ['SNOWFLAKE_WAREHOUSE'],
-    database=os.environ['SNOWFLAKE_DATABASE'],
-    schema=os.environ['SNOWFLAKE_SCHEMA'],
-    client_session_keep_alive=True
-)
+def snowconn():
+    conn = snowflake.connector.connect(
+        user=os.environ['SNOWFLAKE_USER'],
+        role=os.environ['SNOWFLAKE_ROLE'],
+        password=os.environ['SNOWFLAKE_PASSWORD'],
+        account=os.environ['SNOWFLAKE_ACCOUNT'],
+        warehouse=os.environ['SNOWFLAKE_WAREHOUSE'],
+        database=os.environ['SNOWFLAKE_DATABASE'],
+        schema=os.environ['SNOWFLAKE_SCHEMA'],
+        client_session_keep_alive=True
+    )
+    print(f"connected to account {conn.account} wh {conn.warehouse} db {conn.database} schema {conn.schema} with role {conn.role}")
+    return conn
 
 session_creds = {
     "user": os.environ['SNOWFLAKE_USER'],
@@ -34,19 +36,23 @@ session_creds = {
     "schema": os.environ['SNOWFLAKE_SCHEMA'],
 }
 
-session = Session.builder.configs(session_creds).create()
-print(f"connected to {conn.account} {conn.warehouse}")
+def snowsession():
+    session = Session.builder.configs(session_creds).create()
+    return session
 
+
+conn = snowconn()
+session = snowsession()
 
 def run_sql(sql: str, ctx=conn, wait=True):
-    logging.info(f"running sql: {sql}")
+    logging.debug(f"running sql: {sql}")
     return conn.cursor().execute(sql, _no_results=(not wait))
 
 
 # @functools.cache
 def sql_to_df(sql_query, pre_hook=[], ctx=conn):
     if len(pre_hook):
-        logging.info(f"RUNNING pre-hook: {pre_hook}")
+        logging.debug(f"RUNNING pre-hook: {pre_hook}")
     for s in pre_hook:
         run_sql(s,conn)
         # print(f"RUNNING SQL: {sql_query}")
