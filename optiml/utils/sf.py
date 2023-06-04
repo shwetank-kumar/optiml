@@ -8,7 +8,7 @@ import functools
 import time
 from snowflake.snowpark.session import Session
 
-logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s', level=logging.INFO, datefmt='%I:%M:%S')
+logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s', datefmt='%I:%M:%S')
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARN)
 
@@ -49,7 +49,7 @@ def run_sql(sql: str, ctx=conn, wait=True):
     return conn.cursor().execute(sql, _no_results=(not wait))
 
 
-# @functools.cache
+# # @functools.cache
 def sql_to_df(sql_query, pre_hook=[], ctx=conn):
     if len(pre_hook):
         logging.debug(f"RUNNING pre-hook: {pre_hook}")
@@ -62,7 +62,7 @@ def sql_to_df(sql_query, pre_hook=[], ctx=conn):
     
     trimmed_lowered = sql_query.strip().lower()
     if trimmed_lowered.startswith('select') or trimmed_lowered.startswith('with'):
-        print(f"using arrow to fetch results...")
+        logging.info(f"using arrow to fetch results...")
         cur = ctx.cursor()
         cur.execute(sql_query)
         data = cur.fetch_pandas_all() 
@@ -75,3 +75,33 @@ def sql_to_df(sql_query, pre_hook=[], ctx=conn):
     
     data.columns = data.columns.str.lower()
     return data
+
+
+# @functools.cache
+# def sql_to_df(sql_query, pre_hook=[], session=session):
+#     if len(pre_hook):
+#         logging.debug(f"RUNNING pre-hook: {pre_hook}")
+#     for s in pre_hook:
+#         session.sql(s)
+#         # print(f"RUNNING SQL: {sql_query}")
+
+#     # todo: move to latest method of pandas dataframe fetching
+#     # may need to upgrade python: https://github.com/snowflakedb/snowflake-connector-python/issues/986#issuecomment-1115354587
+    
+#     data = session.sql(sql_query).to_pandas()
+
+#     # trimmed_lowered = sql_query.strip().lower()
+#     # if trimmed_lowered.startswith('select') or trimmed_lowered.startswith('with'):
+#     #     print(f"using arrow to fetch results...")
+#     #     cur = ctx.cursor()
+#     #     cur.execute(sql_query)
+#     #     data = cur.fetch_pandas_all() 
+#     #     cur.close()
+#     # else:
+#     #     data = pd.read_sql(
+#     #         sql_query,
+#     #         ctx,
+#     #     )
+    
+#     data.columns = data.columns.str.lower()
+#     return data
