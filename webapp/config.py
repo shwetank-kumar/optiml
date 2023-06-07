@@ -43,8 +43,6 @@ def change_state(key, value):
 names = ["Peter Parker", "Rebecca Miller"]
 usernames = ["admin"]
 passwords = ['admin']
-with open('config.yaml') as file:
-    config = yaml.load(file, Loader=SafeLoader)
 #
 # authenticator = stauth.Authenticate(
 #     config['credentials'],

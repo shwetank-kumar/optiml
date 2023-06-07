@@ -33,11 +33,13 @@ if 'total_cost_df' not in st.session_state:
 
 if 'cost_by_user_df' not in st.session_state:
     st.session_state.cost_by_user_df = 0
-    st.session_state.cost_by_user_df = cqlib.cost_by_user_ts(st.session_state.sdate, st.session_state.edate)
+    st.session_state.cost_by_user_df = cqlib.cost_by_user_ts(st.session_state.sdate,
+                                                             st.session_state.edate)
 
 if 'cost_by_wh_df' not in st.session_state:
     st.session_state.cost_by_wh_df = 0
-    st.session_state.cost_by_wh_df = cqlib.cost_by_wh_ts(st.session_state.sdate, st.session_state.edate)
+    st.session_state.cost_by_wh_df = cqlib.cost_by_wh_ts(st.session_state.sdate,
+                                                         st.session_state.edate)
 
 if 'cost_by_partner_tools_df' not in st.session_state:
     st.session_state.cost_by_partner_tools_df = 0
@@ -49,7 +51,12 @@ if 'logged_in' not in st.session_state:
 if "query_execution_status" not in st.session_state:
     st.session_state.query_execution_status = qqlib.queries_stats_by_execution_status(st.session_state.sdate,
                                                                                       st.session_state.edate)
-
+if "full_table_scans" not in st.session_state:
+    st.session_state.full_table_scans = qqlib.queries_full_table_scan(st.session_state.sdate,
+                                                                      st.session_state.edate)
+if "unique_query_by_type" not in st.session_state:
+    st.session_state.unique_query_by_type = qqlib.unique_queries_by_type(st.session_state.sdate,
+                                                                         st.session_state.edate)
 # df.head()
 
 # --- USER AUTHENTICATION ---
@@ -89,6 +96,3 @@ elif selected == 'Resource Usage':
     show_dashboard(**st.session_state)
 elif selected == "Query Profile":
     query_dashboard(**st.session_state)
-
-# python 3.9.15
-# pandas 1.5.2

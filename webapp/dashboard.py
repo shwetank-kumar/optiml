@@ -1,3 +1,4 @@
+import ast
 import os
 import streamlit as st
 import pandas as pd
@@ -8,7 +9,8 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from optiml.backend.query_profile import QueryProfile
 from PIL import Image
-
+from datetime import datetime
+from operator import attrgetter
 # system import
 from optiml.backend.cost_profile import CostProfile, get_previous_dates
 from optiml.connection import SnowflakeConnConfig
@@ -378,6 +380,7 @@ def generate_resource_monitor_sql(resource_monitor_name="monitor_1", \
     return resource_monitor_sql
 
 
+# ========== Query Analysis ============#
 def total_query_fails(df):
     df_by_day = df.groupby(['day']).agg(
         {'n_success': 'sum', 'n_fail': 'sum', 'credits_success': 'sum', 'credits_fail': 'sum'}).reset_index()
@@ -440,6 +443,69 @@ def warehouse_by_day(df):
     return failed_by_wh_fig, credit_failed_fig
 
 
+def user_by_day(df):
+    df_by_user = df.groupby(["user_name", "day"]).agg(
+        {'n_success': 'sum', 'n_fail': 'sum', 'credits_success': 'sum', 'credits_fail': 'sum'}).reset_index()
+    fig_num_failed_user = px.bar(df_by_user, x="day", y="n_fail", color="user_name", title="Number failed by user")
+    fig_credit_failed_user = px.bar(df_by_user, x="day", y="credits_fail", color="user_name",
+                                    title="Credits failed by user")
+
+    return fig_num_failed_user, fig_credit_failed_user
+
+def get_key(record):
+    return datetime.strptime(record[1].replace(" -0700", ""), '%Y-%m-%d %H:%M:%S.%f')
+
+
+def sort_df_on_date(q, ex, stt):
+    # print(q, ex, stt)
+    x_list = [(i, val) for i, val in enumerate(stt)]
+    if len(x_list) > 5:
+        mylist = sorted(x_list, key=get_key, reverse=True)[:5]
+    else:
+        mylist = sorted(x_list, key=get_key, reverse=True)
+    ex_status = []
+    q_ids = []
+    times = []
+    for i, element in mylist:
+        times.append(stt[i])
+        ex_status.append(ex[i])
+        q_ids.append(q[i])
+    # print(ex_status, q_ids, times)
+    return ex_status, q_ids, times
+
+
+def unique_query_type(df):
+    df["percent_usage"] = df["n_query_type"] / sum(df["n_query_type"]) * 100
+    df_low_usage_queries = df[df["percent_usage"] < 1.00]
+    df = df[df["percent_usage"] > 1.00].reset_index(drop=True)
+    df2 = pd.DataFrame({"n_query_type": sum(df_low_usage_queries["n_query_type"]),
+                        "query_type": "low_usage_queries",
+                        "percent_usage": sum(df_low_usage_queries["percent_usage"])
+                        }, index=[0])
+    df = df.append(df2, ignore_index=True)
+    fig = make_subplots(
+        rows=1, cols=1,
+        specs=[[{"type": "pie"}]],
+        subplot_titles=("Credits")
+    )
+
+    fig.add_trace(go.Pie(labels=df['query_type'].tolist(), \
+                         values=df['n_query_type'].tolist(), \
+                         name="Credits", rotation=320, \
+                         marker_colors=color_scheme, hole=0.4), row=1, col=1)
+
+    fig.update_layout(
+        title={
+            'text': "Queries by type",
+            'y': 0.1,
+            'x': 0.5,
+            'xanchor': 'center',
+            'yanchor': 'bottom'})
+    return fig
+
+
+# ======================================#
+
 def get_resource_monitor_values(ts, te):
     print("Ts te: ", ts, te)
     df_compute = cqlib.cost_of_compute_ts(ts, te)
@@ -483,6 +549,7 @@ def resource_moniter_queries():
     return resource_monitor_queries
 
 
+# ================= Dash Board ===================
 def show_dashboard(**kwargs):
     print("Under Dashboard")
     total_cost_df = kwargs.get('total_cost_df')
@@ -586,8 +653,28 @@ def query_dashboard(**kwargs):
     warehouse_cols = st.columns([1, 1])
     warehouse_cols[0].plotly_chart(failed_by_wh_fig, use_container_width=True)
     warehouse_cols[1].plotly_chart(credit_failed_fig, use_container_width=True)
+    fig_num_failed_user, fig_credit_failed_user = user_by_day(kwargs['query_execution_status'])
+    st.warning("By user by day")
+    user_by_day_cols = st.columns([1, 1])
+    user_by_day_cols[0].plotly_chart(fig_num_failed_user, use_container_width=True)
+    user_by_day_cols[1].plotly_chart(fig_credit_failed_user, use_container_width=True)
 
-    df_expensive_queries_failed = qqlib.queries_by_execution_status(st.session_state.sdate, st.session_state.edate,
-                                                                    'FAIL')
-    df_unique_fail = qqlib.get_unique_failed_queries_with_metrics_ordered(df_expensive_queries_failed, 'credits')
-    df_unique_fail.reset_index(inplace=True)
+    metric = 'credits'
+    df_inefficient_queries = qqlib.n_inefficient_queries(st.session_state.sdate,
+                                                         st.session_state.edate,
+                                                         10, metric=metric)
+
+    df_inefficient_queries[['execution_status', 'query_id', 'start_time']] = df_inefficient_queries.apply(
+        lambda x: sort_df_on_date(x['query_id'],
+                                  x['execution_status'],
+                                  x['start_time']), axis=1, result_type='expand')
+
+    st.warning("👉 Query details for top expensive queries")
+    st.dataframe(df_inefficient_queries, use_container_width=True)
+
+    st.warning("👉 Queries doing full table scans")
+    st.dataframe(kwargs['full_table_scans'], use_container_width=True)
+
+    st.warning("👉 Unique Query By Its Type")
+    fig = unique_query_type(kwargs['unique_query_by_type'])
+    st.plotly_chart(fig, use_container_width=True)
