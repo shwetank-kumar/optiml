@@ -24,14 +24,16 @@ Dev rules for queries:
 
 ### Usage
 
-Create your conda env locally:
-`conda env create -f env/env.yml`
+1. Create your conda env locally:
+`conda env create -f env/env.yml --name [name]`
 
-Activate the environment `conda activate [name]`
+2 Activate the environment:
+`conda activate [name]`
 
-Run jupyter lab from cmd line: `jupyter-lab`
+3. Run jupyter lab: 
+`jupyter-lab`
 
-Create an `env/.env` file with creds for notebooks to load:
+4. Most notebooks require Snowflake creds; these are loaded from a `env/.env` file containing:
 e.g.
 ```
 export SNOWFLAKE_ACCOUNT='OMWYKHW-ENTERPRISE'
