@@ -409,3 +409,245 @@ class QueryProfile(SNFLKQuery):
         """
         df=self.query_to_df(sql)
         return df
+    
+    # def queries_by_resource_by_warehouse(self, start_date='', end_date='', n=10, metric='credits', warehouse_name=""):
+    #     """Inefficient queries as order by metric. Metric options:
+    #         bytes_scanned,
+    #         percentage_scanned_from_cache,
+    #         bytes_spilled_to_local_storage,
+    #         bytes_spilled_to_remote_storage,
+    #         percentage_partitions_scanned,
+    #         partitions_total,
+    #         total_time_elapsed_sec,
+    #         compilation_time_sec,
+    #         execution_time_sec,
+    #         queued_provisioning_time_sec,
+    #         queued_repair_time_sec,
+    #         queued_overload_time_sec,
+    #         list_external_files_time_sec,
+    #         total_time_elapsed_sec,
+    #         credits
+    #     """
+        
+    #     if not end_date:
+    #         today_date = date.today()
+    #         end_date = str(today_date)
+        
+    #     # credit_val = ''
+    #     # if self.credit_value:
+    #     #     credit_val = SNFLKQuery.credit_values[self.credit_value]
+
+    #     sql=f"""
+    #     WITH WAREHOUSE_SIZE AS
+    #     (
+    #         SELECT WAREHOUSE_SIZE, NODES
+    #         FROM (
+    #                 SELECT 'X-SMALL' AS WAREHOUSE_SIZE, 1 AS NODES
+    #                 UNION ALL
+    #                 SELECT 'SMALL' AS WAREHOUSE_SIZE, 2 AS NODES
+    #                 UNION ALL
+    #                 SELECT 'MEDIUM' AS WAREHOUSE_SIZE, 4 AS NODES
+    #                 UNION ALL
+    #                 SELECT 'LARGE' AS WAREHOUSE_SIZE, 8 AS NODES
+    #                 UNION ALL
+    #                 SELECT 'XLARGE' AS WAREHOUSE_SIZE, 16 AS NODES
+    #                 UNION ALL
+    #                 SELECT '2XLARGE' AS WAREHOUSE_SIZE, 32 AS NODES
+    #                 UNION ALL
+    #                 SELECT '3XLARGE' AS WAREHOUSE_SIZE, 64 AS NODES
+    #                 UNION ALL
+    #                 SELECT '4XLARGE' AS WAREHOUSE_SIZE, 128 AS NODES
+    #                 )
+    #     )
+    #     SELECT 
+    #     HASH(Q.QUERY_TEXT) as query_hash
+    #     ,listagg(q.query_id, ',') as query_id
+    #     ,listagg(q.execution_status,',') as execution_status
+    #     ,Q.QUERY_TEXT
+    #     ,Q.warehouse_name
+    #     ,Q.warehouse_size
+    #     ,Q.user_name
+    #     ,count(*) as number_of_queries
+    #     ,listagg(q.start_time,',') as start_time
+    #     ,ROUND(sum(Q.TOTAL_ELAPSED_TIME)/1000,2) as execution_seconds
+    #     ,ROUND(sum((EXECUTION_TIME/(1000*60*60))*WS.NODES),2) as CREDITS
+    #     ,round(execution_seconds/number_of_queries,2) as average_execution_seconds
+    #     ,max(bytes_spilled_to_local_storage) as max_bytes_spilled_local
+    #     ,min(bytes_spilled_to_local_storage) as min_bytes_spilled_local
+    #     ,max(bytes_spilled_to_remote_storage) as max_bytes_spilled_remote
+    #     ,min(bytes_spilled_to_remote_storage) as min_bytes_spilled_remote
+    #     ,max(compilation_time_sec) as max_compilation_time_sec
+    #     ,min(compilation_time_sec) as min_compilation_time_sec
+    #     from {self.dbname}.QUERY_HISTORY Q
+    #     JOIN WAREHOUSE_SIZE WS ON WS.WAREHOUSE_SIZE = upper(Q.WAREHOUSE_SIZE)
+    #     where TO_DATE(Q.START_TIME) between '{start_date}' and '{end_date}'
+    #     and q.warehouse_size is not NULL
+    #     and q.warehouse_name='{warehouse_name}'
+    #     group by query_hash,query_text, warehouse_name, q.warehouse_size, user_name
+    #     order by credits desc
+    #     limit {n} --configurable upper bound threshold
+    #     ;
+    #     """
+    #     df = self.query_to_df(sql)
+    #     df["query_id"] = [query_cell.split(',') for query_cell in df['query_id']]
+    #     df["execution_status"] = [query_cell.split(',') for query_cell in df['execution_status']]
+    #     df["start_time"] = [query_cell.split(',') for query_cell in df['start_time']]
+    #     return df
+
+    # def warehouse_resource_utilization(self, start_date='', end_date='', warehouse_name=""):
+    #     sql = f"""
+    #         select listagg(query_id, ',') as query_id
+    #         ,listagg(total_elapsed_time, ',') as total_elapsed_time
+    #         ,listagg(bytes_scanned, ',') as bytes_scanned
+    #         ,listagg(percentage_scanned_from_cache, ',') as percentage_scanned_from_cache
+    #         ,listagg(bytes_written, ',') as bytes_written
+    #         ,listagg(bytes_written_to_result, ',') as bytes_written_to_result
+    #         ,listagg(bytes_read_from_result, ',') as bytes_read_from_result
+    #         ,listagg(rows_produced, ',') as rows_produced
+    #         ,listagg(rows_inserted, ',') as rows_inserted
+    #         ,listagg(rows_updated, ',') as rows_updated
+    #         ,listagg(rows_deleted, ',') as rows_deleted
+    #         ,listagg(rows_unloaded, ',') as rows_unloaded
+    #         ,listagg(bytes_deleted, ',') as bytes_deleted
+    #         ,listagg(partitions_scanned, ',') as partitions_scanned
+    #         ,listagg(partitions_total, ',') as partitions_total
+    #         ,listagg(bytes_spilled_to_local_storage, ',') as bytes_spilled_to_local_storage
+    #         ,listagg(bytes_spilled_to_remote_storage, ',') as bytes_spilled_to_remote_storage
+    #         ,listagg(bytes_sent_over_the_network, ',') as bytes_sent_over_the_network
+    #         ,listagg(compilation_time, ',') as compilation_time
+    #         ,listagg(execution_time, ',') as execution_time
+    #         ,listagg(queued_provisioning_time, ',') as queued_provisioning_time
+    #         ,listagg(queued_repair_time, ',') as queued_repair_time
+    #         ,listagg(queued_overload_time, ',') as queued_overload_time
+    #         ,listagg(transaction_blocked_time, ',') as transaction_blocked_time
+    #         ,listagg(outbound_data_transfer_bytes, ',') as outbound_data_transfer_bytes
+    #         ,listagg(inbound_data_transfer_bytes, ',') as inbound_data_transfer_bytes
+    #         ,listagg(list_external_files_time, ',') as list_external_files_time
+    #         ,listagg(external_function_total_invocations, ',') as external_function_total_invocations
+    #         ,listagg(external_function_total_sent_rows, ',') as external_function_total_sent_rows
+    #         ,listagg(external_function_total_received_rows, ',') as external_function_total_received_rows
+    #         ,listagg(external_function_total_sent_bytes, ',') as external_function_total_sent_bytes
+    #         ,listagg(external_function_total_received_bytes, ',') as external_function_total_received_bytes
+    #         ,listagg(query_acceleration_bytes_scanned, ',') as query_acceleration_bytes_scanned
+    #         ,listagg(query_acceleration_partitions_scanned, ',') as query_acceleration_partitions_scanned
+    #         ,listagg(query_acceleration_upper_limit_scale_factor, ',') as query_acceleration_upper_limit_scale_factor
+    #         from {self.dbname}.query_history
+    #         where start_time between '{start_date}' and '{end_date}'
+    #         and warehouse_name='{warehouse_name}'
+    #     """
+    #     df = self.query_to_df(sql)
+    #     df["query_id"] = [query_cell.split(',') for query_cell in df['query_id']]
+    #     df["total_elapsed_time"] = [query_cell.split(',') for query_cell in df['total_elapsed_time']]
+    #     df["bytes_scanned"] = [query_cell.split(',') for query_cell in df['bytes_scanned']]
+    #     df["percentage_scanned_from_cache"] = [query_cell.split(',') for query_cell in df['percentage_scanned_from_cache']]
+    #     df["bytes_written"] = [query_cell.split(',') for query_cell in df['bytes_written']]
+    #     df["bytes_written_to_result"] = [query_cell.split(',') for query_cell in df['bytes_written_to_result']]
+    #     df["bytes_read_from_result"] = [query_cell.split(',') for query_cell in df['bytes_read_from_result']]
+    #     df["rows_produced"] = [query_cell.split(',') for query_cell in df['rows_produced']]
+    #     df["rows_inserted"] = [query_cell.split(',') for query_cell in df['rows_inserted']]
+    #     df["rows_updated"] = [query_cell.split(',') for query_cell in df['rows_updated']]
+    #     df["rows_deleted"] = [query_cell.split(',') for query_cell in df['rows_deleted']]
+    #     df["rows_unloaded"] = [query_cell.split(',') for query_cell in df['rows_unloaded']]
+    #     df["bytes_deleted"] = [query_cell.split(',') for query_cell in df['bytes_deleted']]
+    #     df["partitions_scanned"] = [query_cell.split(',') for query_cell in df['partitions_scanned']]
+    #     df["partitions_total"] = [query_cell.split(',') for query_cell in df['partitions_total']]
+    #     df["bytes_spilled_to_local_storage"] = [query_cell.split(',') for query_cell in df['bytes_spilled_to_local_storage']]
+    #     df["bytes_spilled_to_remote_storage"] = [query_cell.split(',') for query_cell in df['bytes_spilled_to_remote_storage']]
+    #     df["bytes_sent_over_the_network"] = [query_cell.split(',') for query_cell in df['bytes_sent_over_the_network']]
+    #     df["compilation_time"] = [query_cell.split(',') for query_cell in df['compilation_time']]
+    #     df["execution_time"] = [query_cell.split(',') for query_cell in df['execution_time']]
+    #     df["queued_provisioning_time"] = [query_cell.split(',') for query_cell in df['queued_provisioning_time']]
+    #     df["queued_repair_time"] = [query_cell.split(',') for query_cell in df['queued_repair_time']]
+    #     df["queued_overload_time"] = [query_cell.split(',') for query_cell in df['queued_overload_time']]
+    #     df["transaction_blocked_time"] = [query_cell.split(',') for query_cell in df['transaction_blocked_time']]
+    #     df["outbound_data_transfer_bytes"] = [query_cell.split(',') for query_cell in df['outbound_data_transfer_bytes']]
+    #     df["inbound_data_transfer_bytes"] = [query_cell.split(',') for query_cell in df['inbound_data_transfer_bytes']]
+    #     df["list_external_files_time"] = [query_cell.split(',') for query_cell in df['list_external_files_time']]
+    #     df["external_function_total_invocations"] = [query_cell.split(',') for query_cell in df['external_function_total_invocations']]
+    #     df["external_function_total_sent_rows"] = [query_cell.split(',') for query_cell in df['external_function_total_sent_rows']]
+    #     df["external_function_total_received_rows"] = [query_cell.split(',') for query_cell in df['external_function_total_received_rows']]
+    #     df["external_function_total_sent_bytes"] = [query_cell.split(',') for query_cell in df['external_function_total_sent_bytes']]
+    #     df["external_function_total_received_bytes"] = [query_cell.split(',') for query_cell in df['external_function_total_received_bytes']]
+    #     df["query_acceleration_bytes_scanned"] = [query_cell.split(',') for query_cell in df['query_acceleration_bytes_scanned']]
+    #     df["query_acceleration_partitions_scanned"] = [query_cell.split(',') for query_cell in df['query_acceleration_partitions_scanned']]
+    #     df["query_acceleration_upper_limit_scale_factor"] = [query_cell.split(',') for query_cell in df['query_acceleration_upper_limit_scale_factor']]
+    #     return df
+
+    def warehouse_resource_utilization(self, start_date='', end_date='', warehouse_name=""):
+        sql = f"""
+            select query_id
+            ,total_elapsed_time
+            ,bytes_scanned
+            ,percentage_scanned_from_cache
+            ,bytes_written
+            ,bytes_written_to_result
+            ,bytes_read_from_result
+            ,rows_produced
+            ,rows_inserted
+            ,rows_updated
+            ,rows_deleted
+            ,rows_unloaded
+            ,bytes_deleted
+            ,partitions_scanned
+            ,partitions_total
+            ,bytes_spilled_to_local_storage
+            ,bytes_spilled_to_remote_storage
+            ,bytes_sent_over_the_network
+            ,compilation_time
+            ,execution_time
+            ,queued_provisioning_time
+            ,queued_repair_time
+            ,queued_overload_time
+            ,transaction_blocked_time
+            ,outbound_data_transfer_bytes
+            ,inbound_data_transfer_bytes
+            ,list_external_files_time
+            ,external_function_total_invocations
+            ,external_function_total_sent_rows
+            ,external_function_total_received_rows
+            ,external_function_total_sent_bytes
+            ,external_function_total_received_bytes
+            ,query_acceleration_bytes_scanned
+            ,query_acceleration_partitions_scanned
+            ,query_acceleration_upper_limit_scale_factor
+            from {self.dbname}.query_history
+            where start_time between '{start_date}' and '{end_date}'
+            and warehouse_name='{warehouse_name}'
+        """
+        df = self.query_to_df(sql)
+        # df["query_id"] = [query_cell.split(',') for query_cell in df['query_id']]
+        # df["total_elapsed_time"] = [query_cell.split(',') for query_cell in df['total_elapsed_time']]
+        # df["bytes_scanned"] = [query_cell.split(',') for query_cell in df['bytes_scanned']]
+        # df["percentage_scanned_from_cache"] = [query_cell.split(',') for query_cell in df['percentage_scanned_from_cache']]
+        # df["bytes_written"] = [query_cell.split(',') for query_cell in df['bytes_written']]
+        # df["bytes_written_to_result"] = [query_cell.split(',') for query_cell in df['bytes_written_to_result']]
+        # df["bytes_read_from_result"] = [query_cell.split(',') for query_cell in df['bytes_read_from_result']]
+        # df["rows_produced"] = [query_cell.split(',') for query_cell in df['rows_produced']]
+        # df["rows_inserted"] = [query_cell.split(',') for query_cell in df['rows_inserted']]
+        # df["rows_updated"] = [query_cell.split(',') for query_cell in df['rows_updated']]
+        # df["rows_deleted"] = [query_cell.split(',') for query_cell in df['rows_deleted']]
+        # df["rows_unloaded"] = [query_cell.split(',') for query_cell in df['rows_unloaded']]
+        # df["bytes_deleted"] = [query_cell.split(',') for query_cell in df['bytes_deleted']]
+        # df["partitions_scanned"] = [query_cell.split(',') for query_cell in df['partitions_scanned']]
+        # df["partitions_total"] = [query_cell.split(',') for query_cell in df['partitions_total']]
+        # df["bytes_spilled_to_local_storage"] = [query_cell.split(',') for query_cell in df['bytes_spilled_to_local_storage']]
+        # df["bytes_spilled_to_remote_storage"] = [query_cell.split(',') for query_cell in df['bytes_spilled_to_remote_storage']]
+        # df["bytes_sent_over_the_network"] = [query_cell.split(',') for query_cell in df['bytes_sent_over_the_network']]
+        # df["compilation_time"] = [query_cell.split(',') for query_cell in df['compilation_time']]
+        # df["execution_time"] = [query_cell.split(',') for query_cell in df['execution_time']]
+        # df["queued_provisioning_time"] = [query_cell.split(',') for query_cell in df['queued_provisioning_time']]
+        # df["queued_repair_time"] = [query_cell.split(',') for query_cell in df['queued_repair_time']]
+        # df["queued_overload_time"] = [query_cell.split(',') for query_cell in df['queued_overload_time']]
+        # df["transaction_blocked_time"] = [query_cell.split(',') for query_cell in df['transaction_blocked_time']]
+        # df["outbound_data_transfer_bytes"] = [query_cell.split(',') for query_cell in df['outbound_data_transfer_bytes']]
+        # df["inbound_data_transfer_bytes"] = [query_cell.split(',') for query_cell in df['inbound_data_transfer_bytes']]
+        # df["list_external_files_time"] = [query_cell.split(',') for query_cell in df['list_external_files_time']]
+        # df["external_function_total_invocations"] = [query_cell.split(',') for query_cell in df['external_function_total_invocations']]
+        # df["external_function_total_sent_rows"] = [query_cell.split(',') for query_cell in df['external_function_total_sent_rows']]
+        # df["external_function_total_received_rows"] = [query_cell.split(',') for query_cell in df['external_function_total_received_rows']]
+        # df["external_function_total_sent_bytes"] = [query_cell.split(',') for query_cell in df['external_function_total_sent_bytes']]
+        # df["external_function_total_received_bytes"] = [query_cell.split(',') for query_cell in df['external_function_total_received_bytes']]
+        # df["query_acceleration_bytes_scanned"] = [query_cell.split(',') for query_cell in df['query_acceleration_bytes_scanned']]
+        # df["query_acceleration_partitions_scanned"] = [query_cell.split(',') for query_cell in df['query_acceleration_partitions_scanned']]
+        # df["query_acceleration_upper_limit_scale_factor"] = [query_cell.split(',') for query_cell in df['query_acceleration_upper_limit_scale_factor']]
+        return df
