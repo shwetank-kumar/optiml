@@ -1,2 +1,0 @@
-### OptiML
-#### Snowflake Cost Analyzer
