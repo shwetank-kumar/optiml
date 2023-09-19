@@ -12,15 +12,15 @@ logging.basicConfig(format='%(asctime)s %(levelname)s:%(message)s', datefmt='%I:
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARN)
 
-def snowconn():
+def snowconn(config=os.environ):
     conn = snowflake.connector.connect(
-        user=os.environ['SNOWFLAKE_USER'],
-        role=os.environ['SNOWFLAKE_ROLE'],
-        password=os.environ['SNOWFLAKE_PASSWORD'],
-        account=os.environ['SNOWFLAKE_ACCOUNT'],
-        warehouse=os.environ['SNOWFLAKE_WAREHOUSE'],
-        database=os.environ['SNOWFLAKE_DATABASE'],
-        schema=os.environ['SNOWFLAKE_SCHEMA'],
+        user=config['SNOWFLAKE_USER'],
+        role=config['SNOWFLAKE_ROLE'],
+        password=config['SNOWFLAKE_PASSWORD'],
+        account=config['SNOWFLAKE_ACCOUNT'],
+        warehouse=config['SNOWFLAKE_WAREHOUSE'],
+        database=config['SNOWFLAKE_DATABASE'],
+        schema=config['SNOWFLAKE_SCHEMA'],
         client_session_keep_alive=True
     )
     print(f"connected to account {conn.account} wh {conn.warehouse} db {conn.database} schema {conn.schema} with role {conn.role}")
@@ -36,7 +36,7 @@ session_creds = {
     "schema": os.environ['SNOWFLAKE_SCHEMA'],
 }
 
-def snowsession():
+def snowsession(creds=session_creds):
     session = Session.builder.configs(session_creds).create()
     return session
 
